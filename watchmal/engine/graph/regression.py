@@ -24,8 +24,9 @@ class RegressionEngine(ReconstructionEngine):
         dump_path, 
         wandb_run=None,
         dataset=None,
-        output_center=0, 
-        output_scale=1
+        output_center=0,
+        output_scale=1,
+        predictions_name=None,
     ):
         """
         Parameters
@@ -44,6 +45,12 @@ class RegressionEngine(ReconstructionEngine):
             Value to subtract from target values
         output_scale : float
             Value to divide target values by
+        predictions_name : string, optional
+            Name of the QUANTITY being predicted, used for the `predicted_<name>.npy`
+            block that analysis/regression.py reads (it keys on the quantity -
+            "positions", "energies" - not on the individual target components). Defaults
+            to `target_key`. Set it to e.g. "positions" to make a run loadable by
+            WatChMaLPositionRegression without further mapping.
         """
         # create the directory for saving the log and dump files
         super().__init__(
@@ -59,6 +66,7 @@ class RegressionEngine(ReconstructionEngine):
 
         self.output_center = output_center # define for the cnn. No idea when it is used
         self.output_scale = output_scale   # neither why to do scaling this way
+        self.predictions_name = predictions_name if predictions_name else target_key
 
 
     def make_plots(self, preds, targets, prefix_plot_name):
@@ -127,6 +135,14 @@ class RegressionEngine(ReconstructionEngine):
         # analysis pipeline indexes, so a graph run can now be fed to it unchanged.
         for column, name in enumerate(self.target_names):
             res[f'predicted_{name}'] = final_preds[:, column]
+
+        # …and the whole (N, n_targets) block under the QUANTITY name. analysis/
+        # regression.py keys on the quantity, not the component: WatChMaLPositionRegression
+        # reads `predicted_positions` of shape (N, 3), whereas a graph config names its
+        # targets per component (vtx_x, vtx_y, vtx_z). Writing both means a run satisfies
+        # either convention. Set `predictions_name: positions` on the engine to line a
+        # graph run up with the shipped analysis classes directly.
+        res[f'predicted_{self.predictions_name}'] = final_preds
 
         # Indices are 1D, so concatenating them is equivalent to flattening.
         if indices is not None:

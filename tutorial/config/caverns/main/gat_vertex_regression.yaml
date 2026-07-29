@@ -10,7 +10,6 @@
 #   tutorial/config/caverns/data/dataset/20inch_pmt_knn5_vertex_regression.yaml
 
 MASTER_PORT: 12355
-core: caverns
 find_unused_parameters: True  # graph/MR models can leave params unused each forward; opt in explicitly
 seed: 1234
 

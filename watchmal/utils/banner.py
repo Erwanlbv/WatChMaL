@@ -25,7 +25,7 @@ Automatic degradations (important on a cluster)
 -----------------------------------------------
   * non-TTY stdout (Slurm log, file redirection) -> static banner, no ANSI
   * NO_COLOR / TERM=dumb                          -> no color
-  * HK_BANNER=0                                    -> nothing at all
+  * NO_WATCHMAL_BANNER=true (or HK_BANNER=0)       -> nothing at all
   * terminal too narrow                           -> geometry reduced automatically
 """
 
@@ -112,6 +112,21 @@ PMT_LEVELS = (
 
 def _fg(rgb) -> str:
     return f"{CSI}38;2;{rgb[0]};{rgb[1]};{rgb[2]}m"
+
+
+def banner_disabled() -> bool:
+    """Whether the environment has switched the banner off entirely.
+
+    `NO_WATCHMAL_BANNER=true` (also 1/yes/on, case-insensitive) is the documented
+    switch: no animation, no static frame, the run just logs as it always did. Useful
+    for CI, for a terminal that mangles ANSI, or simply as a preference.
+
+    `HK_BANNER=0` is still honoured - it was the original name and is baked into
+    existing launch scripts.
+    """
+    if os.environ.get("NO_WATCHMAL_BANNER", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    return os.environ.get("HK_BANNER", "1") == "0"
 
 
 def _ease_in(t: float) -> float:
@@ -219,7 +234,7 @@ class HyperKBanner:
         self._min_gap = gap
         self._forced_term_size = term_size
 
-        env_enabled = enabled and os.environ.get("HK_BANNER", "1") != "0"
+        env_enabled = enabled and not banner_disabled()
         tty = force_animation or (hasattr(self.stream, "isatty") and self.stream.isatty())
         self.animate = env_enabled and tty
         self.enabled = env_enabled

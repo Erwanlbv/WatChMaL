@@ -61,6 +61,18 @@ def _engine_label(hydra_config) -> str:
     return parts[-1] if parts else "engine"
 
 
+def _device_label(gpu_list) -> str:
+    """Every device the run uses, e.g. 'cuda:0,1' or 'cuda:2,4,5' - not just this rank's.
+
+    The banner is drawn by rank 0, so showing `self.device` there would read as
+    "cuda:0" on an 8-GPU job: technically true of the process doing the drawing, and
+    misleading about the run.
+    """
+    if not gpu_list:
+        return "cpu"
+    return "cuda:" + ",".join(str(int(gpu)) for gpu in gpu_list)
+
+
 def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
 
     ngpus = len(gpu_list)
@@ -137,7 +149,7 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
     # wandb. On other ranks, and whenever stdout is not a TTY, every call is a no-op.
     with loading_banner(
         engine=_engine_label(hydra_config),
-        device=device,
+        device=_device_label(gpu_list),
         params=nb_params,
         enabled=(rank == 0),
     ) as banner:

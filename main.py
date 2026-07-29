@@ -30,7 +30,7 @@ import os
 
 from watchmal.utils.banner import loading_banner
 from watchmal.utils.logging_utils import get_git_version
-from watchmal.entrypoints.run import _engine_label, run
+from watchmal.entrypoints.run import _device_label, _engine_label, run
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def main(config):
         # run.py builds the engine there is nothing left to wait for, and the animation
         # would flash past. It has to end before mp.spawn, or both children would
         # inherit a terminal region each thinks it owns; run.py then starts its own.
-        with loading_banner(engine=_engine_label(config), device="loading") as banner:
+        with loading_banner(engine=_engine_label(config), device=_device_label(gpu_list)) as banner:
             banner.set_status(f"building in-memory dataset ({dataset_kind})")
             if 'pyg_in_memory' in dataset_kind:
                 from watchmal.dataset.graph.data_utils import get_dataset

@@ -28,8 +28,9 @@ import torch.multiprocessing as mp
 import logging
 import os
 
+from watchmal.utils.banner import loading_banner
 from watchmal.utils.logging_utils import get_git_version
-from watchmal.entrypoints.run import run
+from watchmal.entrypoints.run import _engine_label, run
 
 log = logging.getLogger(__name__)
 
@@ -81,11 +82,19 @@ def main(config):
     dataset_config = data_config.get("dataset", None) if data_config is not None else None
     dataset_kind = dataset_config.get("kind", "") if dataset_config is not None else ""
     if 'in_memory' in dataset_kind:
-        if 'pyg_in_memory' in dataset_kind:
-            from watchmal.dataset.graph.data_utils import get_dataset
-            dataset = get_dataset(data_config)
-        else:
-            raise ValueError(f"Unknown in_memory dataset kind: {dataset_kind}")
+        # This is the slow part of an in-memory (graph) start-up, and it happens HERE,
+        # in the parent, before any worker exists - InMemoryDataset loads its whole
+        # data.pt. So the banner belongs here too, not only in the worker: by the time
+        # run.py builds the engine there is nothing left to wait for, and the animation
+        # would flash past. It has to end before mp.spawn, or both children would
+        # inherit a terminal region each thinks it owns; run.py then starts its own.
+        with loading_banner(engine=_engine_label(config), device="loading") as banner:
+            banner.set_status(f"building in-memory dataset ({dataset_kind})")
+            if 'pyg_in_memory' in dataset_kind:
+                from watchmal.dataset.graph.data_utils import get_dataset
+                dataset = get_dataset(data_config)
+            else:
+                raise ValueError(f"Unknown in_memory dataset kind: {dataset_kind}")
     else:
         dataset = None
 

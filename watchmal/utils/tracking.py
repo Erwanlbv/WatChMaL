@@ -45,6 +45,12 @@ class RunTracker:
         self.csv_enabled = csv_enabled
         self._train_log = None  # lazily created CSVLog (per rank)
         self._val_log = None    # lazily created CSVLog (rank 0)
+        # Optional one-shot callback, fired the first time a training step is logged -
+        # i.e. the first batch has been through the model. Every family's train loop
+        # funnels through train_step(), so this is the one place that knows "training
+        # has actually started" without any per-family code. Used by the entrypoint to
+        # end the start-up banner at the right moment.
+        self.on_first_step = None
 
     # ------------------------------------------------------------------ #
     # wandb passthroughs - no-ops when no run is active
@@ -74,6 +80,11 @@ class RunTracker:
         `metrics` is a dict of python scalars (e.g. {'loss': ..., 'accuracy': ...}).
         Keys must be stable across steps (the header is taken from the first row).
         """
+        # Before the csv_enabled guard: the hook marks that training started, which is
+        # true whether or not this run writes CSVs.
+        if self.on_first_step is not None:
+            callback, self.on_first_step = self.on_first_step, None
+            callback()
         if not self.csv_enabled:
             return
         if self._train_log is None:

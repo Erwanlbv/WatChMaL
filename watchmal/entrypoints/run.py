@@ -153,6 +153,13 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
             dataset=dataset,
         )
 
+        # Stop point 1 (the normal case): the banner ends when the first batch has been
+        # through the model, not when configuration finishes. Every family's train loop
+        # reports its first step through the tracker, so this needs no per-family code -
+        # and it means the banner keeps running through the parts of train() that happen
+        # before any compute (loader iteration, first-epoch setup, cuDNN autotune).
+        engine.tracker.on_first_step = banner.stop
+
         banner.set_status("configuring precision")
         engine.configure_amp(hydra_config.get("amp", False))
 
@@ -185,13 +192,26 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
                     banner.set_status(f"configuring early stopping for '{task}'")
                     engine.configure_early_stopping(task_config.pop('early_stopping'))
 
-        banner.set_status("ready")
+        # ---- run tasks ---- #
+        # Inside the banner's `with`, so it also covers the inter-task barrier - which
+        # on a shared node is a real wait when the ranks arrive unevenly.
+        for task, task_config in hydra_config.tasks.items():
+            if is_distributed:
+                banner.set_status(f"waiting for all ranks before '{task}'")
+                torch.distributed.barrier()
 
-    # ---- run tasks ---- #
-    for task, task_config in hydra_config.tasks.items():
-        if is_distributed:
-            torch.distributed.barrier()
-        getattr(engine, task)(**task_config)
+            # Stop point 2: only `train` produces training steps, so any other task
+            # would leave the banner animating forever - end it before dispatching one.
+            # (An evaluate-only or multi-ring test-only run never reaches stop point 1.)
+            if task == "train":
+                banner.set_status("training")
+            else:
+                banner.stop()
+
+            getattr(engine, task)(**task_config)
+
+    # Stop point 3, the backstop: leaving the `with` stops the banner if neither of the
+    # above fired. banner.stop() is idempotent, so the three points cannot conflict.
 
     # ---- teardown ---- #
     if (rank == 0) and (wandb_run is not None):  # close W&B first

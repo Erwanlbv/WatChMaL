@@ -1,6 +1,6 @@
 import torch
 
-from watchmal.engine.reconstruction import ReconstructionEngine
+from watchmal.engine.images.reconstruction import ImageReconstructionEngine
 from collections.abc import Mapping
 
 # define some useful metrics for different regression targets
@@ -29,7 +29,7 @@ metric_functions = {
 }
 
 
-class RegressionEngine(ReconstructionEngine):
+class ImageRegressionEngine(ImageReconstructionEngine):
     """Engine for performing training or evaluation for a regression network."""
     def __init__(self, target_key, model, rank, device, dump_path, wandb_run=None, dataset=None, target_scale_offset=0, target_scale_factor=1):
         """
@@ -46,7 +46,7 @@ class RegressionEngine(ReconstructionEngine):
         dump_path : string
             The path to store outputs in.
         wandb_run, dataset : optional
-            Uniform-constructor args forwarded to the base (see ReconstructionEngine).
+            Uniform-constructor args forwarded to the base (see ImageReconstructionEngine).
         target_scale_offset : float or dict of float
             Offset to subtract from target values when calculating the loss, or dict of offsets for each target
         target_scale_factor : float or dict of float

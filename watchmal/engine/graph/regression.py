@@ -120,11 +120,19 @@ class RegressionEngine(ReconstructionEngine):
 
         res = {'preds': final_preds, 'targets': final_targets}
 
+        # Same values, additionally written one array per target under the name
+        # analysis/regression.py reads (`get_outputs("predicted_" + name)`). `preds` is
+        # kept as the (N, n_targets) block because that is the convenient shape for
+        # anything comparing targets jointly; the per-target files are what the existing
+        # analysis pipeline indexes, so a graph run can now be fed to it unchanged.
+        for column, name in enumerate(self.target_names):
+            res[f'predicted_{name}'] = final_preds[:, column]
+
         # Indices are 1D, so concatenating them is equivalent to flattening.
         if indices is not None:
             final_indices = np.array(indices).flatten()
             res['indices'] = final_indices
-            
+
         return res
 
 

@@ -5,7 +5,7 @@ from torch_geometric.nn import global_mean_pool
 from torch_geometric.utils import softmax
 
 # Watchmal import
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 log = setup_logging(__name__)
 
 

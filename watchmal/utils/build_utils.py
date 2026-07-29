@@ -10,7 +10,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from hydra.utils import instantiate
 
 # watchmal import
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 
 log = setup_logging(__name__)
 

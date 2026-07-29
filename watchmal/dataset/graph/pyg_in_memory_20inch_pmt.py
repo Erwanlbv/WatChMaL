@@ -4,7 +4,7 @@ from typing import Callable
 from torch_geometric.data import InMemoryDataset
 
 # watchmal imports
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 
 log = setup_logging(__name__)
 

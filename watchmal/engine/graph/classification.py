@@ -4,7 +4,7 @@ import numpy as np
 # watchmal imports
 from watchmal.engine.graph.reconstruction import ReconstructionEngine
 
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 
 log = setup_logging(__name__)
 

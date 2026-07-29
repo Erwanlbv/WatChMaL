@@ -31,7 +31,7 @@ from hydra.utils import instantiate
 from watchmal.engine.base_engine import BaseEngine
 from watchmal.dataset.multiring.sparse_cnn import VoxelGridConfig, HyperKSparseCNN3D
 from watchmal.dataset.samplers.batch_file_sampler import BatchFileSampler
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 # banner moved to the entrypoint (watchmal/entrypoints/run.py)
 from watchmal.utils.multiring_sparse_helpers import (
     LoaderCfg,

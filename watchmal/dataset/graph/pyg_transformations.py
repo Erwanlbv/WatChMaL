@@ -7,7 +7,7 @@ from omegaconf import OmegaConf
 
 # watchmal imports
 from watchmal.dataset.graph.data_utils import match_type
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 
 log = setup_logging(__name__)
 

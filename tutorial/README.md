@@ -263,6 +263,15 @@ gitignored (personal, never pushed). Bootstrap them from the tutorials:
 bash setup/make_dirs.sh     # copies tutorial/config/ -> config/  and  tutorial/launch/ -> launch/
 ```
 
+It refuses to run if `config/` or `launch/` already exists, because the copy overwrites
+file by file and both directories are gitignored — an existing workspace would lose every
+local edit with nothing to recover from. Once you are sure (back it up first):
+
+```bash
+bash setup/make_dirs.sh --force    # or -f
+bash setup/make_dirs.sh --help
+```
+
 Then:
 
 1. Rename/edit a main config, e.g. `config/main/my_experiment.yaml`.

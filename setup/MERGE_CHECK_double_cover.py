@@ -33,6 +33,7 @@ if str(REPO_ROOT) not in sys.path:
 TOY_H5 = "/Users/erwan/work/mc_prods/watchmal_tutorial/data/mPMT_3m_100k_e-_100k_mu-.h5"
 TOY_MAP = "/Users/erwan/work/mc_prods/watchmal_tutorial/data/mPMT_3m_mpmt_image_positions.npz"
 TOY_GEO = "/Users/erwan/work/mc_prods/watchmal_tutorial/data/mPMT_3m_geometry.npz"
+HK_H5 = "/Users/erwan/work/mc_prods/hk/hkfd_emu_rwcs_2k_watchmal.h5"
 HK_MAP = "/Users/erwan/work/geom/HK_HybridmPMT_WithOD_Realistic_mapping_squashed.npz"
 HK_GEO = "/Users/erwan/work/geom/hyperk_20inch_pmts.npz"
 
@@ -113,27 +114,60 @@ def check_toy() -> bool:
 
 
 def check_hk() -> bool:
-    """HK far detector: single 20-inch PMTs, CNNDataset - double_cover is NOT reachable."""
+    """HK far detector: single 20-inch PMTs, CNNDataset.
+
+    `double_cover` here comes from upstream PR #107 (WatChMaL/WatChMaL#107). On plain
+    master CNNDataset has no such method and hardcodes `self.transforms = None`, so this
+    section reports the gap instead of testing it.
+    """
     from watchmal.dataset.cnn.cnn_dataset import CNNDataset
 
     print("\n=== HK far detector (CNNDataset) ===")
-    has = hasattr(CNNDataset, "double_cover")
-    print(f"  CNNDataset defines double_cover: {has}")
-    print("  CNNDataset.__init__ hardcodes `self.transforms = None` (the get_transformations")
-    print("  call is commented out), so ANY transform listed in a config is silently ignored.")
-
     pip = np.load(HK_MAP)["pmt_image_positions"]
     xyz = np.load(HK_GEO)["position"]
+    n = len(pip)
     H, W = pip[:, 0].max() + 1, pip[:, 1].max() + 1
     ids = np.zeros((H, W), np.int64)
-    ids[pip[:, 0], pip[:, 1]] = np.arange(len(pip)) + 1
+    ids[pip[:, 0], pip[:, 1]] = np.arange(n) + 1
     typical = interior_spacing(ids, xyz)
-    print(f"  image {H}x{W}; typical adjacent-PMT spacing {typical:.1f} cm")
-    print("  what conv_pad_mode: circular currently wraps onto what:")
+    print(f"  image {H}x{W}, {n} PMTs; typical adjacent-PMT spacing {typical:.1f} cm")
+
+    if not hasattr(CNNDataset, "double_cover"):
+        print("  CNNDataset has NO double_cover (upstream PR #107 not applied), and")
+        print("  __init__ hardcodes `self.transforms = None`, so any transform named in a")
+        print("  config is silently ignored. What conv_pad_mode: circular wraps today:")
+        report_edges("plain image", ids, xyz, typical)
+        print("  -> azimuth wraps correctly; the vertical wrap glues the tank's two ends.")
+        return True  # informational; not a failure of the suite
+
+    ds = CNNDataset(h5file=HK_H5, pmt_positions_file=HK_MAP, geometry_file=HK_GEO,
+                    use_times=True, use_charges=True, one_indexed=False,
+                    transforms=["double_cover"])
+    tracer = np.broadcast_to(ids, (2, H, W)).astype(np.float32).copy()
+    out = ds.double_cover({"data": tracer.copy()})["data"]
+    assert np.all(out == out[0]), "channels disagree after transform"
+    out_ids = out[0].astype(np.int64)
+
+    ok = []
+    barrel_h = H - 2 * ds.endcap_size
+    shape_ok = out.shape[1] == H + barrel_h and out.shape[2] == W
+    print(f"  shape        (2,{H},{W}) -> {tuple(out.shape)}; expected height "
+          f"{H}+{barrel_h}={H + barrel_h}: {'PASS' if shape_ok else 'FAIL'}")
+    ok.append(shape_ok)
+
+    counts = np.bincount(out_ids.ravel(), minlength=n + 1)[1:]
+    cover_ok = bool((counts == 2).all())
+    print(f"  double cover {int((counts == 2).sum())}/{n} PMTs appear exactly twice "
+          f"(min {counts.min()}, max {counts.max()}): {'PASS' if cover_ok else 'FAIL'}")
+    ok.append(cover_ok)
+
+    print("  cyclic boundaries:")
     report_edges("plain image", ids, xyz, typical)
-    print("  -> azimuth (left<->right) wraps correctly; the vertical wrap glues the two")
-    print("     ends of the tank together. A single-PMT double_cover does not exist yet.")
-    return not has  # informational: reports the gap, does not fail the suite
+    after = report_edges("after double_cover", out_ids, xyz, typical)
+    edges_ok = all(d <= 1.5 * typical for d in after)
+    print(f"    -> glued pixels are physical neighbours: {'PASS' if edges_ok else 'FAIL'}")
+    ok.append(edges_ok)
+    return all(ok)
 
 
 if __name__ == "__main__":

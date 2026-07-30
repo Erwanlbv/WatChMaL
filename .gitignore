@@ -133,12 +133,3 @@ __MACOSX/
 
 # demonstration plots (regenerate with setup/demo_determinism.py)
 /plots/
-
-# watchmal/dataset/cnn/cnn_dataset.py currently carries upstream PR #107
-# ("Add double cover for CNN Dataset", nickwp, WatChMaL/WatChMaL#107), pulled in locally
-# to test the CNN double cover on HK FD. It is upstream's work and must not be committed
-# from here - it should arrive by merging the PR, not from this branch.
-# NOTE: the file is already TRACKED, so this .gitignore entry does not by itself stop a
-# commit. It is backed by `git update-index --skip-worktree` on the same path; undo with
-#   git update-index --no-skip-worktree watchmal/dataset/cnn/cnn_dataset.py
-/watchmal/dataset/cnn/cnn_dataset.py

@@ -75,7 +75,16 @@ def main() -> None:
     else:
         from analysis.regression import WatChMaLPositionRegression, plot_histograms
 
-        truths = np.load(run_dir / "outputs" / "targets.npy")
+        # The two families name the truth array differently: the graph engine writes
+        # `targets.npy`, while the image regression engine writes one file per target key
+        # (`positions.npy` alongside `predicted_positions.npy`). Accept either, so this
+        # check covers both - it previously only ever ran against a graph run.
+        truth_file = next((f for f in ("positions.npy", "targets.npy")
+                           if (run_dir / "outputs" / f).exists()), None)
+        if truth_file is None:
+            raise SystemExit(f"no truth array in {run_dir / 'outputs'}: expected "
+                             f"positions.npy (image engine) or targets.npy (graph engine)")
+        truths = np.load(run_dir / "outputs" / truth_file)
         run = WatChMaLPositionRegression(str(run_dir), run_label=label,
                                          true_positions=truths)
 

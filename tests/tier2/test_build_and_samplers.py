@@ -16,12 +16,14 @@ run still completes and the numbers are merely wrong.
 
 from __future__ import annotations
 
+import inspect
+
 import numpy as np
 import pytest
 import torch
 from omegaconf import OmegaConf
 
-from watchmal.dataset.samplers.samplers import DistributedSamplerWrapper, SubsetRandomSampler
+from watchmal.dataset.samplers.sampler import DistributedSamplerWrapper, SubsetRandomSampler
 from watchmal.utils.build_utils import build_model, merge_config
 
 
@@ -72,6 +74,23 @@ def test_distributed_wrapper_splits_without_overlap():
     assert not set(per_rank[0]) & set(per_rank[1]), "rank slices must be disjoint"
     assert set(per_rank[0]) | set(per_rank[1]) == set(indices.tolist()), (
         "an even-sized split should also be exhaustive"
+    )
+
+
+def test_tail_policy_must_be_stated_explicitly():
+    """`drop_last` deliberately has no default.
+
+    Two loader factories are still live and they want opposite tail policies:
+    `get_data_loader` (image) pads, `build_loader` (graph, multi-ring) drops when
+    training. While they shared a name but not a module, each inherited its policy from
+    whichever class it happened to import — so merging the two modules would have flipped
+    the image family from padded to dropped with nothing raising. A required argument
+    makes that class of mistake unrepresentable; keep it required until the two factories
+    are one.
+    """
+    default = inspect.signature(DistributedSamplerWrapper.__init__).parameters["drop_last"].default
+    assert default is inspect.Parameter.empty, (
+        "a default here lets a call site inherit a tail policy silently"
     )
 
 

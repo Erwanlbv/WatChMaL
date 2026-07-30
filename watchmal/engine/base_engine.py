@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 # torch_geometric is imported lazily in build_loader, see there.
 
 # watchmal imports
-from watchmal.dataset.samplers.samplers import DistributedSamplerWrapper
+from watchmal.dataset.samplers.sampler import DistributedSamplerWrapper
 from watchmal.utils.logging_utils import setup_logging
 from watchmal.utils.tracking import RunTracker
 

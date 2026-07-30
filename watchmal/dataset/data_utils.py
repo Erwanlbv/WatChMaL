@@ -14,7 +14,7 @@ import numpy as np
 import random
 
 # WatChMaL imports
-from watchmal.dataset.samplers.watchmal_core_sampler import DistributedSamplerWrapper
+from watchmal.dataset.samplers.sampler import DistributedSamplerWrapper
 
 # torch_geometric is an OPTIONAL dependency (see requirements-graph.txt): it is needed
 # only by the graph / GNN family. It is imported lazily inside get_data_loader (below,
@@ -80,7 +80,12 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, i
         # per-GPU batch to 0 (which makes the DataLoader raise). Matches the graph loader.
         batch_size = max(int(batch_size/ngpus), 1)
 
-        sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
+        # drop_last=False pads the tail, so no event is ever excluded. This is what this
+        # loader has always done - the wrapper it used to import took no drop_last and so
+        # inherited torch's False. Stated explicitly now that the wrapper is shared with
+        # build_loader, which asks for True when training. Deciding the policy per task
+        # (train vs validation) rather than per loader factory is a separate change.
+        sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed, drop_last=False)
 
     if is_graph:
         # Local import: see the note at the top of the module - keeps PyG out of the

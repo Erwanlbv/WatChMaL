@@ -15,7 +15,7 @@ from hydra.utils import instantiate
 import torch
 
 # WatChMaL imports
-from watchmal.dataset.samplers.samplers import SubsetSequentialSampler
+from watchmal.dataset.samplers.sampler import SubsetSequentialSampler
 from watchmal.utils.logging_utils import setup_logging
 from watchmal.utils.early_stopping import EarlyStopping
 # banner moved to the entrypoint (watchmal/entrypoints/run.py)

@@ -1,1 +1,1 @@
-_target_: watchmal.dataset.samplers.samplers.SubsetSequentialSampler
+_target_: watchmal.dataset.samplers.sampler.SubsetSequentialSampler

@@ -1,1 +1,1 @@
-_target_: torch.utils.data.sampler.SubsetRandomSampler
+_target_: watchmal.dataset.samplers.sampler.SubsetRandomSampler

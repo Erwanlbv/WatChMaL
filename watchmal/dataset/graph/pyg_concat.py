@@ -6,7 +6,7 @@ from typing import List, Tuple, Union
 import numpy as np
 from torch.utils.data import Dataset
 
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 
 log = setup_logging(__name__)
 

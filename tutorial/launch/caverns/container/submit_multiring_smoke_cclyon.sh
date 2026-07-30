@@ -26,12 +26,27 @@ set -euo pipefail
 echo "Job: ${SLURM_JOB_NAME:-} (${SLURM_JOB_ID:-}) on $(hostname)"
 nvidia-smi || true
 
+# Repo root: found by searching UPWARD for the marker files, not by counting
+# directories. setup/make_dirs.sh copies this tree from tutorial/launch/ to launch/,
+# which removes one level, so any fixed number of ".." is correct in exactly one of the
+# two locations. Override with NEUNET_ROOT to run from outside the repo.
+_find_repo_root() {
+  local dir="$1"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -f "$dir/main.py" && -d "$dir/watchmal" ]]; then printf '%s' "$dir"; return 0; fi
+    dir="$(dirname "$dir")"
+  done
+  echo "ERROR: no WatChMaL root (main.py + watchmal/) found above $1 - set NEUNET_ROOT" >&2
+  return 1
+}
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Resolve this repo's root so the container binds YOUR checkout, not a hard path.
 # Under sbatch, SLURM runs a spooled COPY of this script, so the script location
 # is unreliable -> use SLURM_SUBMIT_DIR (run `sbatch` FROM THE REPO ROOT, which
 # the relative logs/ SBATCH output above already requires). Direct-bash runs
 # fall back to the script location (<repo>/tutorial/launch/caverns/container -> ../../../..).
-REPO_ROOT="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)}"
+REPO_ROOT="${SLURM_SUBMIT_DIR:-$(_find_repo_root "$_SCRIPT_DIR")}"
 echo "Binding repo: ${REPO_ROOT}"
 if [[ ! -f "${REPO_ROOT}/main.py" ]]; then
     echo "ERROR: ${REPO_ROOT} does not look like the repo root (no main.py)." >&2

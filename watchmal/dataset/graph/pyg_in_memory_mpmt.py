@@ -11,7 +11,7 @@ from torch_geometric.data import Batch, InMemoryDataset
 from typing import Callable
 
 from watchmal.dataset.graph.pyg_in_memory_20inch_pmt import PyGInMemory20inchDataset
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 
 
 log = setup_logging(__name__)

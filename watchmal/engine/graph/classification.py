@@ -4,9 +4,29 @@ import numpy as np
 # watchmal imports
 from watchmal.engine.graph.reconstruction import ReconstructionEngine
 
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 
 log = setup_logging(__name__)
+
+
+def _softmax(logits: np.ndarray) -> np.ndarray:
+    """Row-wise softmax, in numpy so the save path needs no scipy (an optional dep).
+
+    Shifted by the row max before exponentiating - the standard guard against
+    overflow, which a saturated head reaches easily. A single-column input is the
+    flattened/binary head: it is expanded to the two-column [background, signal] form
+    that `analysis/classification.py` indexes by class.
+    """
+    logits = np.asarray(logits, dtype=np.float64)
+    if logits.ndim == 1:
+        logits = logits.reshape(-1, 1)
+    if logits.shape[1] == 1:
+        signal = 1.0 / (1.0 + np.exp(-logits[:, 0]))
+        return np.column_stack([1.0 - signal, signal]).astype(np.float32)
+    shifted = logits - logits.max(axis=1, keepdims=True)
+    exponentiated = np.exp(shifted)
+    return (exponentiated / exponentiated.sum(axis=1, keepdims=True)).astype(np.float32)
+
 
 class ClassifierEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a classification network."""
@@ -146,15 +166,27 @@ class ClassifierEngine(ReconstructionEngine):
         return res
 
     def to_disk_data_reformat(self, preds, targets, indices=None):
+        """Arrays written to `outputs/*.npy` at the end of evaluate().
 
+        Two conventions are written on purpose:
+
+        * `preds` / `targets` - the raw model output (logits) and the true labels. Kept
+          because the logits are what you want when debugging a model: the softmax
+          throws away scale, and a saturated or collapsed head looks identical to a
+          healthy one once normalised.
+        * `softmax` - the same thing normalised per event, under the name
+          `analysis/classification.py` reads (`self.get_outputs("softmax")`). Without
+          it a graph run's outputs cannot be fed to the classification analysis at all,
+          even though the training CSVs already are.
+        """
         preds   = np.array(preds).reshape(-1, len(self.target_names))
         targets = np.array(targets).flatten()
-        res = {'preds': preds,'targets': targets}
+        res = {'preds': preds, 'targets': targets, 'softmax': _softmax(preds)}
 
         if indices is not None:
             final_indices = np.array(indices).flatten()
             res['indices'] = final_indices
-            
+
         return res
 
 

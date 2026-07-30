@@ -2,7 +2,11 @@ name: docs
 
 on:
   push:
-    branches: [master]
+    # `master` is where the published site comes from. `feat/docs-site` is here so the
+    # site can be previewed from a fork before it is merged - GitHub only offers manual
+    # dispatch for workflows that already exist on the default branch, which this one
+    # does not until that merge happens. Drop the second entry once it does.
+    branches: [master, feat/docs-site]
     paths:
       - 'docs/**'
       - 'landing/**'

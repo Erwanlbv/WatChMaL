@@ -16,13 +16,13 @@ relative `logs/` output requires that anyway — `mkdir -p logs` first);
 Owners: `eleblevec` = Erwan, `mferey` = Mathieu, `melbaz` = Mathias.
 
 Remember: make any edits in **your own** `config/` **+** `launch/` **copies**
-(see [Create your own workspace](../README.md#4-create-your-own-workspace)), not in the
+(see [Create your own workspace](../getting-started/workspace.md)), not in the
 tutorial trees.
 
 ## Contents
 
 - [Must change before running](#must-change-before-running)
-- [Reference resources — keep for a first run on CC-Lyon](#reference-resources--keep-for-a-first-run-on-cc-lyon)
+- [Reference resources — keep for a first run on CC-Lyon](#reference-resources-keep-for-a-first-run-on-cc-lyon)
 
 ## Must change before running
 
@@ -60,7 +60,7 @@ group-readable. Change them only when you switch to your own data.
 | `tutorial/config/caverns/data/dataset/wcte_mpmt_classification.yaml`          | `split_path`                   | `/sps/t2k/mferey/CAVERNS/.../index_list/...npz`                         | indices for the WCTE reference sample                                                                      |
 | `tutorial/config/caverns/data/dataset/wcte_mpmt_classification.yaml`          | `pyg_data_folder_path`         | `/sps/hyperk/mferey/Data/WCTE_v2/Graphs/...`                            | WCTE reference graph pairs (PMT + mPMT)                                                                    |
 | `tutorial/launch/caverns/container/submit_multiring_smoke_cclyon.sh`           | `IMAGE` / `HOST_DATA` defaults | `/sps/t2k/melbaz/env/ml_image.sif`, `/sps/t2k/melbaz/Simulation/output` | smoke-test image + multi-ring data — overridable without editing via `SMOKE_IMAGE` / `SMOKE_DATA`          |
-| `tutorial/launch/caverns/container/run_in_container.sh`                        | `IMAGE`, `BIND_DATA`           | same image + data as above                                              | container image (see [available containers](cclyon_available_containers.md)) and multi-ring reference data |
+| `tutorial/launch/caverns/container/run_in_container.sh`                        | `IMAGE`, `BIND_DATA`           | same image + data as above                                              | container image (see [available containers](cc-in2p3-containers.md)) and multi-ring reference data |
 
 
 Note: `tutorial/config/caverns/data/dataset/multiring_sparse3d.yaml` contains only

@@ -2,8 +2,8 @@
 
 What can be trained out-of-the-box on CC-Lyon, per detector. Each row maps to a shipped
 example config in `tutorial/config/caverns/main/` — launch pattern in the main
-[README](../README.md#3-run-a-tutorial-example). Container choice:
-[cclyon_available_containers.md](cclyon_available_containers.md).
+[README](../model-zoo.md). Container choice:
+[cc-in2p3-containers.md](cc-in2p3-containers.md).
 
 ## WCTE (Water Cherenkov Test Experiment)
 

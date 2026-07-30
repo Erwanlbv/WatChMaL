@@ -1,0 +1,60 @@
+site_name: WatChMaL
+site_description: Machine learning for Water Cherenkov detectors — one core for image, graph and sparse-3D models
+site_url: https://watchmal.github.io/WatChMaL/docs/
+repo_url: https://github.com/WatChMaL/WatChMaL
+repo_name: WatChMaL/WatChMaL
+docs_dir: docs
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+  palette:
+    - scheme: default
+      primary: teal
+      accent: cyan
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - scheme: slate
+      primary: teal
+      accent: cyan
+      toggle: { icon: material/weather-sunny, name: Light mode }
+
+plugins:
+  - search
+
+# Clicking the logo/title returns to the project landing page (the site root),
+# not the docs home, since the docs are served beneath it at /docs/.
+extra:
+  homepage: https://watchmal.github.io/WatChMaL/
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.arithmatex: { generic: true }
+  - attr_list
+  - tables
+  - toc: { permalink: true }
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Model zoo: model-zoo.md
+  - Getting started:
+      - Install: getting-started/install.md
+      - Quickstart: getting-started/quickstart.md
+      - Your own workspace: getting-started/workspace.md
+  - Clusters:
+      - Overview: clusters/index.md
+      - CC-IN2P3 — containers: clusters/cc-in2p3-containers.md
+      - CC-IN2P3 — detectors & data: clusters/cc-in2p3-detectors.md
+      - CC-IN2P3 — paths to change: clusters/cc-in2p3-paths.md
+  - Contributing: https://github.com/WatChMaL/WatChMaL/blob/master/CONTRIBUTING.md

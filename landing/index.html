@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WatChMaL — Water Cherenkov Machine Learning</title>
+<meta name="description" content="One core for training and evaluating machine learning models on Water Cherenkov detector data: image, graph and sparse-3D families behind a single entrypoint.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
+</head>
+<body>
+
+<header class="nav">
+  <a class="brand" href="./">
+    <span class="brand-mark" aria-hidden="true"></span>
+    WatChMaL
+  </a>
+  <nav class="nav-links">
+    <a href="docs/">Docs</a>
+    <a href="docs/model-zoo/">Model zoo</a>
+    <a href="docs/clusters/">Clusters</a>
+    <a href="https://github.com/WatChMaL/WatChMaL">GitHub</a>
+    <button class="theme-toggle" id="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">◐</button>
+  </nav>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Water Cherenkov Machine Learning</p>
+      <h1>One core for machine learning on Water Cherenkov detectors.</h1>
+      <p class="lede">
+        Train, evaluate and compare <strong>image</strong>, <strong>graph</strong> and
+        <strong>sparse-3D</strong> models on the same data, behind a single entrypoint and
+        one configuration system. Particle ID, vertex and energy reconstruction,
+        multi-ring segmentation.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="docs/getting-started/quickstart/">Quickstart</a>
+        <a class="btn btn-ghost" href="docs/model-zoo/">Browse the model zoo</a>
+      </div>
+      <p class="paper-note">
+        Built for the Hyper-K, IWCD and WCTE collaborations · Apache-2.0
+      </p>
+    </div>
+
+    <div class="hero-art">
+      <!-- Schematic: one event, three representations. Intentionally a diagram, not a
+           result plot — the interactive figures land here once they exist. -->
+      <svg viewBox="0 0 520 300" role="img" aria-label="One event shown three ways: an mPMT image, a k-NN graph, and a sparse voxel grid">
+        <!-- panel 1: image -->
+        <text class="svg-label" x="78" y="24" text-anchor="middle">image</text>
+        <g transform="translate(20,38)">
+          <rect class="svg-frame" x="0" y="0" width="116" height="116" rx="8"/>
+          <g class="svg-px">
+            <rect x="14" y="14" width="16" height="16" rx="3" opacity=".18"/>
+            <rect x="34" y="14" width="16" height="16" rx="3" opacity=".30"/>
+            <rect x="54" y="14" width="16" height="16" rx="3" opacity=".22"/>
+            <rect x="74" y="14" width="16" height="16" rx="3" opacity=".12"/>
+            <rect x="14" y="34" width="16" height="16" rx="3" opacity=".35"/>
+            <rect x="34" y="34" width="16" height="16" rx="3" opacity=".85"/>
+            <rect x="54" y="34" width="16" height="16" rx="3" opacity=".95"/>
+            <rect x="74" y="34" width="16" height="16" rx="3" opacity=".45"/>
+            <rect x="14" y="54" width="16" height="16" rx="3" opacity=".55"/>
+            <rect x="34" y="54" width="16" height="16" rx="3" opacity="1"/>
+            <rect x="54" y="54" width="16" height="16" rx="3" opacity=".90"/>
+            <rect x="74" y="54" width="16" height="16" rx="3" opacity=".38"/>
+            <rect x="14" y="74" width="16" height="16" rx="3" opacity=".20"/>
+            <rect x="34" y="74" width="16" height="16" rx="3" opacity=".48"/>
+            <rect x="54" y="74" width="16" height="16" rx="3" opacity=".33"/>
+            <rect x="74" y="74" width="16" height="16" rx="3" opacity=".15"/>
+          </g>
+        </g>
+
+        <!-- panel 2: graph -->
+        <text class="svg-label" x="260" y="24" text-anchor="middle">graph</text>
+        <g transform="translate(202,38)">
+          <rect class="svg-frame" x="0" y="0" width="116" height="116" rx="8"/>
+          <g class="svg-edge">
+            <line x1="30" y1="30" x2="62" y2="46"/>
+            <line x1="62" y1="46" x2="88" y2="26"/>
+            <line x1="30" y1="30" x2="38" y2="70"/>
+            <line x1="62" y1="46" x2="38" y2="70"/>
+            <line x1="62" y1="46" x2="82" y2="76"/>
+            <line x1="38" y1="70" x2="60" y2="94"/>
+            <line x1="82" y1="76" x2="60" y2="94"/>
+            <line x1="88" y1="26" x2="82" y2="76"/>
+          </g>
+          <g class="svg-node">
+            <circle cx="30" cy="30" r="6"/>
+            <circle cx="62" cy="46" r="8"/>
+            <circle cx="88" cy="26" r="5"/>
+            <circle cx="38" cy="70" r="7"/>
+            <circle cx="82" cy="76" r="6"/>
+            <circle cx="60" cy="94" r="5"/>
+          </g>
+        </g>
+
+        <!-- panel 3: sparse voxels -->
+        <text class="svg-label" x="442" y="24" text-anchor="middle">sparse 3D</text>
+        <g transform="translate(384,38)">
+          <rect class="svg-frame" x="0" y="0" width="116" height="116" rx="8"/>
+          <g class="svg-vox">
+            <path d="M34 62 l18-10 18 10 -18 10Z" opacity=".95"/>
+            <path d="M34 62 v18 l18 10 v-18Z" opacity=".62"/>
+            <path d="M70 62 v18 l-18 10 v-18Z" opacity=".38"/>
+            <path d="M52 42 l18-10 18 10 -18 10Z" opacity=".55"/>
+            <path d="M52 42 v18 l18 10 v-18Z" opacity=".34"/>
+            <path d="M88 42 v18 l-18 10 v-18Z" opacity=".22"/>
+            <path d="M16 42 l18-10 18 10 -18 10Z" opacity=".40"/>
+            <path d="M16 42 v18 l18 10 v-18Z" opacity=".26"/>
+          </g>
+        </g>
+
+        <!-- the shared spine -->
+        <g class="svg-spine">
+          <line x1="78"  y1="170" x2="78"  y2="196"/>
+          <line x1="260" y1="170" x2="260" y2="196"/>
+          <line x1="442" y1="170" x2="442" y2="196"/>
+          <line x1="78"  y1="196" x2="442" y2="196"/>
+          <line x1="260" y1="196" x2="260" y2="216"/>
+        </g>
+        <rect class="svg-core" x="176" y="216" width="168" height="40" rx="10"/>
+        <text class="svg-core-label" x="260" y="241" text-anchor="middle">one core</text>
+        <text class="svg-sub" x="260" y="278" text-anchor="middle">one entrypoint · one engine hierarchy · one config system</text>
+      </svg>
+      <p class="art-caption">The same event, three representations — one framework behind them.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <h2>The framework at a glance</h2>
+    <div class="grid grid-4">
+      <article class="card">
+        <h3>One entrypoint</h3>
+        <p>Every family runs through the same <code>main.py</code> and the same engine
+           hierarchy. No per-family fork of the training code.</p>
+      </article>
+      <article class="card">
+        <h3>Configuration, not code</h3>
+        <p>Hydra composes a run from config groups. Swapping a model, dataset or optimiser
+           is a YAML line, not a patch.</p>
+      </article>
+      <article class="card">
+        <h3>Optional stays optional</h3>
+        <p>The base install runs the image family with no PyTorch Geometric and no
+           <code>wandb</code>. CI proves that boundary on every commit.</p>
+      </article>
+      <article class="card">
+        <h3>Reproducible runs</h3>
+        <p>One top-level seed threads through samplers and distributed training; a
+           deterministic mode makes two runs bit-identical.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="band alt">
+    <h2>Start here</h2>
+    <p class="band-sub">Three ways in, depending on what you came for.</p>
+    <div class="grid grid-3">
+      <a class="card card-link" href="docs/getting-started/quickstart/">
+        <h3>Run something →</h3>
+        <p>Install, build a small dataset and train a model end to end on a laptop CPU.</p>
+      </a>
+      <a class="card card-link" href="docs/model-zoo/">
+        <h3>Find a model →</h3>
+        <p>Every task, model and dataset combination, the config that runs it, and how far
+           it has actually been verified.</p>
+      </a>
+      <a class="card card-link" href="docs/clusters/">
+        <h3>Run at scale →</h3>
+        <p>Containers, reference datasets and launch scripts for CC-IN2P3, with the paths
+           you need to change.</p>
+      </a>
+    </div>
+  </section>
+
+  <section class="band split">
+    <div class="split-copy">
+      <h2>A run is a composed configuration</h2>
+      <p>
+        A top-level config names a model, a dataset, an engine and a list of tasks. Hydra
+        assembles them, and any value can be overridden from the command line — so a
+        hyper-parameter scan needs no new file.
+      </p>
+      <a class="btn btn-ghost" href="docs/getting-started/quickstart/">Read the quickstart</a>
+    </div>
+    <div class="split-code">
+<pre><span class="c"># train a graph attention network for particle ID</span>
+python main.py \
+  --config-path tutorial/config/caverns/main \
+  --config-name gat_classification
+
+<span class="c"># same model, different learning rate and 40 epochs</span>
+python main.py \
+  --config-path tutorial/config/caverns/main \
+  --config-name gat_classification \
+  tasks.train.optimizers.lr=1e-4 \
+  tasks.train.epochs=40
+
+<span class="c"># print the fully composed config and exit</span>
+python main.py --config-name resnet_train -c job</pre>
+    </div>
+  </section>
+
+  <section class="band cite">
+    <h2>Citing WatChMaL</h2>
+    <p class="fine">
+      If WatChMaL contributes to work you publish, please cite the repository and the
+      relevant detector collaboration. A <code>CITATION.cff</code> will be added with the
+      first tagged release.
+    </p>
+    <blockquote>
+      WatChMaL — Water Cherenkov Machine Learning.
+      <a href="https://github.com/WatChMaL/WatChMaL">github.com/WatChMaL/WatChMaL</a>
+    </blockquote>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div>
+      <a class="brand" href="./"><span class="brand-mark" aria-hidden="true"></span> WatChMaL</a>
+      <p class="fine">Machine learning for Water Cherenkov detectors.</p>
+    </div>
+    <nav class="footer-links">
+      <a href="docs/">Documentation</a>
+      <a href="docs/getting-started/install/">Install</a>
+      <a href="docs/model-zoo/">Model zoo</a>
+    </nav>
+    <nav class="footer-links">
+      <a href="https://github.com/WatChMaL/WatChMaL">Repository</a>
+      <a href="https://github.com/WatChMaL/WatChMaL/issues">Issues</a>
+      <a href="https://hydra.cc/">Hydra</a>
+    </nav>
+  </div>
+  <p class="fine copyright">Released under the Apache License 2.0.</p>
+</footer>
+
+<script>
+  // Theme: remember an explicit choice, otherwise follow the OS.
+  (function () {
+    var saved = localStorage.getItem('watchmal-theme');
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+    document.getElementById('theme-toggle').addEventListener('click', function () {
+      var cur = document.documentElement.getAttribute('data-theme');
+      if (!cur) {
+        cur = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      }
+      var next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('watchmal-theme', next);
+    });
+  })();
+</script>
+
+</body>
+</html>

@@ -92,9 +92,15 @@ class ImageRegressionEngine(ImageReconstructionEngine):
 
     def compute_metrics(self):
         self.loss = self.criterion(self.model_out, self.stacked_target)
-        # return loss and metrics for the predictions
+        # Reshape each prediction to its target's shape before measuring. torch.split gives
+        # every prediction a trailing target-size axis, so a scalar target such as
+        # `energies` arrives as (B, 1) while the target itself is (B,) - H5CommonDataset
+        # squeezes the stored (N, 1). Subtracting those broadcasts to (B, B) and averages
+        # over B^2 mismatched pairs instead of the B real ones, silently reporting a wrong
+        # metric. The two always hold the same number of elements (the split is BY
+        # target_sizes), so the reshape is safe and a no-op for vector targets.
         metrics = {k: m for t, v in self.target_dict.items() if t in metric_functions
-                   for k, m in metric_functions[t](self.predictions["predicted_"+t], v).items()}
+                   for k, m in metric_functions[t](self.predictions["predicted_"+t].reshape(v.shape), v).items()}
         metrics['loss'] = self.loss
         return metrics
 

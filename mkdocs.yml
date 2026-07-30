@@ -29,8 +29,11 @@ plugins:
 
 # Clicking the logo/title returns to the project landing page (the site root),
 # not the docs home, since the docs are served beneath it at /docs/.
+# Root-relative on purpose: the same build is served from watchmal.github.io/WatChMaL/
+# and, while previewing, from <fork>.github.io/WatChMaL/. An absolute URL here 404s on
+# whichever of the two is not the one it names.
 extra:
-  homepage: https://watchmal.github.io/WatChMaL/
+  homepage: /WatChMaL/
 
 markdown_extensions:
   - admonition

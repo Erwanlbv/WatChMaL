@@ -143,6 +143,42 @@ section { padding-inline: clamp(1rem, 4vw, 2.5rem); }
 .svg-sub { fill: var(--muted); font-size: 11px; font-family: var(--font); }
 .art-caption { font-size: 0.82rem; color: var(--muted); text-align: center; margin: 0.7rem 0 0; }
 
+/* EVENT DISPLAY */
+.evd-band .band-sub { max-width: 78ch; }
+.evd {
+  --evd-wire: #24405a;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1rem 1rem 0.75rem;
+}
+:root[data-theme="light"] .evd { --evd-wire: #c4d6e2; }
+@media (prefers-color-scheme: light) { :root:not([data-theme]) .evd { --evd-wire: #c4d6e2; } }
+
+.evd canvas {
+  display: block; width: 100%; height: clamp(340px, 46vw, 560px);
+  touch-action: none; cursor: grab;
+}
+.evd canvas:active { cursor: grabbing; }
+
+.evd-controls {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.evd-btn {
+  font: inherit; font-size: 0.88rem; font-weight: 600;
+  padding: 0.35rem 0.85rem; border-radius: 8px; cursor: pointer;
+  background: transparent; color: var(--muted); border: 1px solid var(--border);
+}
+.evd-btn:hover { color: var(--text); border-color: var(--accent); }
+.evd-btn.is-active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--accent); color: var(--text);
+}
+.evd-meta { margin-left: auto; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 560px) {
+  .evd-meta { margin-left: 0; width: 100%; }
+}
+
 /* GRIDS + CARDS */
 .grid { display: grid; gap: 1rem; }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }

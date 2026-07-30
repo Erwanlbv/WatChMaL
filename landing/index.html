@@ -129,6 +129,32 @@
     </div>
   </section>
 
+  <section class="band evd-band">
+    <h2>What the detector sees</h2>
+    <p class="band-sub">
+      Simulated single-particle events, rendered from the same graph datasets the models
+      train on. Each point is a struck photomultiplier tube, coloured by collected charge;
+      the Cherenkov cone intersects the tank wall as a ring. The electron ring is diffuse
+      because the shower scatters, the muon ring sharp because the track is straight —
+      that difference is what a particle-identification network learns.
+    </p>
+
+    <div class="evd">
+      <div class="evd-controls" role="group" aria-label="Select event">
+        <button class="evd-btn is-active" data-event="0">electron</button>
+        <button class="evd-btn" data-event="1">muon</button>
+        <span class="evd-meta" id="evd-meta"></span>
+      </div>
+      <canvas id="evd-canvas" width="1100" height="620"
+              aria-label="Interactive three-dimensional display of a simulated event"></canvas>
+      <noscript><p class="fine">The event display requires JavaScript.</p></noscript>
+      <p class="art-caption">
+        Drag to rotate · the view turns about the detector axis on its own.
+        Tank: 32.4 m radius, 33 m half-height.
+      </p>
+    </div>
+  </section>
+
   <section class="band">
     <h2>The framework at a glance</h2>
     <div class="grid grid-4">
@@ -238,6 +264,163 @@ python main.py --config-name resnet_train -c job</pre>
   </div>
   <p class="fine copyright">Released under the Apache License 2.0.</p>
 </footer>
+
+<script>
+/* ------------------------------------------------------------------------------
+   Interactive event display.
+
+   A few thousand points on a canvas: no WebGL, no library. The payload is a static
+   JSON file exported by setup/make_event_display_data.py, so the page still has no
+   runtime dependency on anything but itself.
+   ------------------------------------------------------------------------------ */
+(function () {
+  var canvas = document.getElementById('evd-canvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var meta = document.getElementById('evd-meta');
+
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var state = { data: null, index: 0, azimuth: 0.6, elevation: 0.32, dragging: false };
+
+  // Viridis, sampled at six stops. Perceptually uniform, and the convention in the
+  // field for charge maps, so it reads correctly without a tutorial.
+  var RAMP = [[68,1,84],[65,68,135],[42,120,142],[34,168,132],[122,209,81],[253,231,37]];
+  function colour(t) {
+    t = Math.max(0, Math.min(1, t)) * (RAMP.length - 1);
+    var i = Math.floor(t), f = t - i, a = RAMP[i], b = RAMP[Math.min(i + 1, RAMP.length - 1)];
+    return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * f) + ','
+                  + Math.round(a[1] + (b[1] - a[1]) * f) + ','
+                  + Math.round(a[2] + (b[2] - a[2]) * f) + ')';
+  }
+
+  function resize() {
+    var ratio = window.devicePixelRatio || 1;
+    var w = canvas.clientWidth, h = canvas.clientHeight;
+    canvas.width = w * ratio; canvas.height = h * ratio;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  }
+
+  function project(x, y, z, geom) {
+    // Rotate about the detector (z) axis, then tilt the camera. Mild perspective:
+    // enough to read as three-dimensional, not enough to distort the ring.
+    var ca = Math.cos(state.azimuth), sa = Math.sin(state.azimuth);
+    var rx = x * ca - y * sa, ry = x * sa + y * ca;
+    // z is the detector axis and stays vertical on screen. A positive elevation puts
+    // the camera above the mid-plane, so the top of the tank must come out *nearer*
+    // (smaller depth) and higher on screen.
+    var ce = Math.cos(state.elevation), se = Math.sin(state.elevation);
+    var vy = z * ce + ry * se, depth = ry * ce - z * se;
+    // Gentle perspective: enough to separate near wall from far, not enough to make
+    // a cylinder look like a cone.
+    var persp = geom.scale / (1 + depth / (geom.span * 7.0));
+    return { sx: geom.cx + rx * persp, sy: geom.cy - vy * persp, depth: depth };
+  }
+
+  function geometry() {
+    var d = state.data.detector;
+    var span = Math.max(d.radius, d.half_height);
+    return {
+      cx: canvas.clientWidth / 2, cy: canvas.clientHeight / 2, span: span,
+      scale: Math.min(canvas.clientWidth, canvas.clientHeight) * 0.36 / span
+    };
+  }
+
+  function drawTank(geom) {
+    var d = state.data.detector, i, p;
+    ctx.strokeStyle = getComputedStyle(canvas).getPropertyValue('--evd-wire').trim() || '#2a4257';
+    ctx.lineWidth = 1;
+    [d.half_height, -d.half_height].forEach(function (zc) {
+      ctx.beginPath();
+      for (i = 0; i <= 72; i++) {
+        var a = i / 72 * Math.PI * 2;
+        p = project(d.radius * Math.cos(a), d.radius * Math.sin(a), zc, geom);
+        i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy);
+      }
+      ctx.stroke();
+    });
+    for (i = 0; i < 6; i++) {                       // a few staves for depth cueing
+      var a2 = i / 6 * Math.PI * 2;
+      var top = project(d.radius * Math.cos(a2), d.radius * Math.sin(a2), d.half_height, geom);
+      var bot = project(d.radius * Math.cos(a2), d.radius * Math.sin(a2), -d.half_height, geom);
+      ctx.beginPath(); ctx.moveTo(top.sx, top.sy); ctx.lineTo(bot.sx, bot.sy); ctx.stroke();
+    }
+  }
+
+  function draw() {
+    if (!state.data) return;
+    var ev = state.data.events[state.index], geom = geometry(), i;
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    drawTank(geom);
+
+    // Log charge: the dynamic range is ~4 decades, so a linear ramp would show one
+    // bright tube and nothing else.
+    var order = [], lq = [];
+    for (i = 0; i < ev.q.length; i++) { order.push(i); lq.push(Math.log10(ev.q[i] + 1)); }
+    var lmax = Math.max.apply(null, lq);
+
+    var proj = order.map(function (i) { return project(ev.x[i], ev.y[i], ev.z[i], geom); });
+    order.sort(function (a, b) { return proj[b].depth - proj[a].depth; });  // painter's
+
+    for (var k = 0; k < order.length; k++) {
+      i = order[k];
+      var t = lq[i] / lmax, p = proj[i];
+      ctx.fillStyle = colour(t);
+      ctx.globalAlpha = 0.35 + 0.65 * t;
+      var r = 1.1 + 2.6 * t;
+      ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function setEvent(i) {
+    state.index = i;
+    var ev = state.data.events[i];
+    meta.textContent = ev.hits.toLocaleString('en') + ' PMTs hit · ' +
+                       Math.round(ev.charge_total).toLocaleString('en') + ' photoelectrons';
+    Array.prototype.forEach.call(document.querySelectorAll('.evd-btn'), function (b) {
+      b.classList.toggle('is-active', +b.dataset.event === i);
+    });
+    draw();
+  }
+
+  var last = 0;
+  function frame(now) {
+    if (!state.dragging && !reduced) {
+      state.azimuth += (now - last) * 0.00018;      // ~0.6 rpm, slow enough to read
+      draw();
+    }
+    last = now;
+    requestAnimationFrame(frame);
+  }
+
+  canvas.addEventListener('pointerdown', function (e) {
+    state.dragging = true; canvas.setPointerCapture(e.pointerId);
+    state.px = e.clientX; state.py = e.clientY;
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (!state.dragging) return;
+    state.azimuth += (e.clientX - state.px) * 0.008;
+    state.elevation = Math.max(-1.3, Math.min(1.3, state.elevation + (e.clientY - state.py) * 0.006));
+    state.px = e.clientX; state.py = e.clientY; draw();
+  });
+  ['pointerup', 'pointercancel'].forEach(function (t) {
+    canvas.addEventListener(t, function () { state.dragging = false; });
+  });
+  document.querySelectorAll('.evd-btn').forEach(function (b) {
+    b.addEventListener('click', function () { setEvent(+b.dataset.event); });
+  });
+  window.addEventListener('resize', function () { resize(); draw(); });
+
+  fetch('events.json')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      state.data = d; resize(); setEvent(0); requestAnimationFrame(frame);
+    })
+    .catch(function () {
+      meta.textContent = 'event data unavailable';
+    });
+})();
+</script>
 
 <script>
   // Theme: remember an explicit choice, otherwise follow the OS.

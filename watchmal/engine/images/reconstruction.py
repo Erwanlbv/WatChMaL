@@ -154,12 +154,13 @@ class ImageReconstructionEngine(BaseEngine):
         start_time = datetime.now()
         step_time = start_time
         epoch_start_time = start_time
+        # Epochs are numbered from 0 everywhere in WatChMaL - logs, checkpoint suffixes and
+        # the `epoch` column of the training CSVs all use the same 0-based value, so a line
+        # in a log and a row in a CSV can be matched without an off-by-one.
         for self.epoch in range(epochs):
+            epoch_start_time = datetime.now()
             if self.rank == 0:
-                if self.epoch > 0:
-                    log.info(f"Epoch {self.epoch} completed in {datetime.now() - epoch_start_time}")
-                    epoch_start_time = datetime.now()
-                log.info(f"Epoch {self.epoch+1} starting at {datetime.now()}")
+                log.info(f"Epoch {self.epoch}/{epochs-1} starting at {epoch_start_time}")
 
             train_loader = self.data_loaders["train"]
             # update seeding for distributed samplers
@@ -202,7 +203,7 @@ class ImageReconstructionEngine(BaseEngine):
                         step_time = datetime.now()
                         average_step_time = (step_time - previous_step_time)/val_interval
                         print(f"Iteration {self.iteration},"
-                              f" Epoch {self.epoch+1}/{epochs},"
+                              f" Epoch {self.epoch}/{epochs-1},"
                               f" Step {step}/{steps_per_epoch}"
                               f" Step time {average_step_time},"
                               f" Epoch time {step_time-epoch_start_time}"
@@ -211,10 +212,11 @@ class ImageReconstructionEngine(BaseEngine):
                     self.validate(val_iter, num_val_batches, checkpointing)
             # save state at end of epoch
             if self.rank == 0 and (save_interval is not None) and ((self.epoch+1) % save_interval == 0):
-                self.save_state(suffix=f'_epoch_{self.epoch+1}')
+                self.save_state(suffix=f'_epoch_{self.epoch}')
+            if self.rank == 0:
+                log.info(f"Epoch {self.epoch} completed in {datetime.now() - epoch_start_time}")
         self.tracker.close()
         if self.rank == 0:
-            log.info(f"Epoch {self.epoch} completed in {datetime.now() - epoch_start_time}")
             log.info(f"Training {epochs} epochs completed in {datetime.now()-start_time}")
 
     def validate(self, val_iter, num_val_batches, checkpointing):

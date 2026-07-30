@@ -353,7 +353,7 @@ class ReconstructionEngine(BaseEngine):
             # ---- Starting the training epoch ---- #
             epoch_start_time = datetime.now()
             if ( self.rank == 0 ):
-                log.info(f"\n\nTraining epoch {self.epoch + 1}/{epochs} starting at {epoch_start_time}")
+                log.info(f"\n\nTraining epoch {self.epoch}/{epochs-1} starting at {epoch_start_time}")
             
 
             # update seeding for distributed samplers
@@ -376,7 +376,7 @@ class ReconstructionEngine(BaseEngine):
 
             # --- Display global info about the train epoch --- #
             if self.rank == 0:
-                log.info(f"(Train) Epoch : {epoch + 1} completed in {(epoch_end_time - epoch_start_time)} | Iteration : {self.iteration} ")
+                log.info(f"(Train) Epoch : {epoch} completed in {(epoch_end_time - epoch_start_time)} | Iteration : {self.iteration} ")
                 log.info(f"Total time since the beginning of the run : {epoch_end_time - start_run_time}")
                 log.info(f"Metrics over the (train) epoch {', '.join(f'{k}: {v:.5g}' for k, v in metrics_epoch_history.items())}")
 

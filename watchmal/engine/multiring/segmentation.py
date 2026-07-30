@@ -549,15 +549,15 @@ class MultiRingSegEngine(BaseEngine):
                 root_ds = getattr(ds, "dataset", ds)
                 if hasattr(root_ds, "clear_cache"):
                     if self.rank == 0:
-                        log.info(f"[Epoch {epoch + 1}] Clearing train dataset cache")
+                        log.info(f"[Epoch {epoch}] Clearing train dataset cache")
                     root_ds.clear_cache()
 
             epoch_start_time = datetime.now()
             if self.rank == 0:
-                log.info(f"\n\nTraining epoch {self.epoch + 1}/{epochs} starting at {epoch_start_time}")
+                log.info(f"\n\nTraining epoch {self.epoch}/{epochs-1} starting at {epoch_start_time}")
                 if self.optimizer is not None:
                     current_lr0 = self.optimizer.param_groups[0]["lr"]
-                    log.info(f"[Epoch {self.epoch + 1}] Current LR: {current_lr0:.6g}")
+                    log.info(f"[Epoch {self.epoch}] Current LR: {current_lr0:.6g}")
                     if self.wandb_run is not None:
                         self.wandb_run.log({"learning_rate": current_lr0, "epoch": self.epoch})
 
@@ -582,7 +582,7 @@ class MultiRingSegEngine(BaseEngine):
             epoch_end_time = datetime.now()
 
             if self.rank == 0:
-                log.info(f"(Train) Epoch : {epoch + 1} completed in {(epoch_end_time - epoch_start_time)} | Iteration : {self.iteration} ")
+                log.info(f"(Train) Epoch : {epoch} completed in {(epoch_end_time - epoch_start_time)} | Iteration : {self.iteration} ")
                 log.info(f"Total time since the beginning of the run : {epoch_end_time - start_run_time}")
                 log.info("Metrics over the (train) epoch " + ", ".join(f"{k}: {v:.5g}" for k, v in metrics_epoch_history.items()))
 

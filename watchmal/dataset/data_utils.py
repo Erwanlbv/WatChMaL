@@ -89,8 +89,15 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, i
 
         return PyGDataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
     else:
-        return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=drop_last,
-                          persistent_workers=(num_workers > 0), pin_memory=is_gpu, multiprocessing_context='fork')
+        # multiprocessing_context and persistent_workers are only legal with worker
+        # processes: torch raises "can only be used with multi-process loading" for the
+        # first when num_workers == 0, which made num_workers=0 impossible for the image
+        # family (and num_workers=0 is what a CPU smoke run and a debugger both want).
+        worker_kwargs = {}
+        if num_workers > 0:
+            worker_kwargs = {"persistent_workers": True, "multiprocessing_context": "fork"}
+        return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers,
+                          drop_last=drop_last, pin_memory=is_gpu, **worker_kwargs)
 
 
 def get_transformations(transformations, transform_names):

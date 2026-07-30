@@ -1,3 +1,6 @@
+# Smallest ResNet the factory offers (BasicBlock, layers [2,2,2,2]) - the one
+# resnet_train.yaml selects by default. Channel counts come from resnet_defaults;
+# override num_output_channels to match your number of classes.
 defaults:
   - resnet_defaults
 _target_: watchmal.model.resnet.resnet18

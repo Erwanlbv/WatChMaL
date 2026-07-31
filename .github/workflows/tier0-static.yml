@@ -42,7 +42,7 @@ jobs:
       # Deliberately NOT installing requirements.txt: this tier must keep working
       # when the framework's dependencies cannot be installed.
       - name: Install check tools only
-        run: pip install pyyaml pytest ruff
+        run: pip install -r test-requirements.txt
 
       - name: Syntax - every module compiles
         run: python -m compileall -q watchmal analysis main.py

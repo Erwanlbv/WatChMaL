@@ -1,0 +1,29 @@
+# GPU bundle for the graph/GNN family (GCN, GAT, mPMT hierarchical GAT). No spconv -
+# see requirements-gpu-images.txt for the image/multi-ring GPU bundle, or
+# requirements-full.txt to run everything in one environment.
+#
+# torch_scatter/torch_cluster ship as prebuilt wheels matched to an exact torch+CUDA
+# build, so torch is pinned to the same version the cluster's ml_image.sif runs
+# (checked 2026-07-31 via `ssh cc apptainer exec .../ml_image.sif python -c '...'`):
+# torch 2.2.2+cu121, torch_geometric 2.5.3, torch_scatter 2.1.2+pt22cu121,
+# torch_cluster 1.6.3+pt22cu121. The --find-links index below is torch-version-specific
+# and is what selects those exact builds; torch_scatter/torch_cluster are left unpinned
+# here since it is the only build available there anyway.
+#
+# timm is included for parity with the cluster's all-in-one image, not because any
+# graph config currently uses a transformer backbone.
+#
+#   pip install -r requirements-gpu-graph.txt
+
+--index-url https://download.pytorch.org/whl/cu121
+--extra-index-url https://pypi.org/simple
+--find-links https://data.pyg.org/whl/torch-2.2.2+cu121.html
+
+-r requirements.txt
+
+torch==2.2.2
+torch_geometric==2.5.3
+torch_scatter
+torch_cluster
+timm
+wandb

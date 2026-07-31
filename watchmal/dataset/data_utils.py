@@ -16,7 +16,8 @@ import random
 # WatChMaL imports
 from watchmal.dataset.samplers.watchmal_core_sampler import DistributedSamplerWrapper
 
-# torch_geometric is an OPTIONAL dependency (see requirements-graph.txt): it is needed
+# torch_geometric is an OPTIONAL dependency (see requirements-ci.txt or
+# requirements-gpu-graph.txt): it is needed
 # only by the graph / GNN family. It is imported lazily inside get_data_loader (below,
 # guarded by is_graph) rather than at module scope, because this module is on the import
 # path of the CNN engine - watchmal/engine/reconstruction.py imports it - so an eager

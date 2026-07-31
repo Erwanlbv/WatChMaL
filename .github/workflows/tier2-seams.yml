@@ -37,13 +37,10 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install torch (CPU wheels)
-        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-
       # torch_geometric is needed here: the concatenation and dataset-indexing checks
       # import watchmal.dataset.graph.*. No compiled PyG extension is required.
       - name: Install framework requirements
-        run: pip install -r requirements.txt -r requirements-graph.txt pytest
+        run: pip install -r requirements-ci.txt
 
       - name: Merge-seam tests
         run: pytest tests/tier2

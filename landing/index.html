@@ -169,16 +169,17 @@
            is a YAML line, not a patch.</p>
       </article>
       <article class="card">
-        <h3>From a laptop to a cluster</h3>
-        <p>The same configuration runs on one CPU or many GPUs. Distributed training is a
-           shared layer — rank-aware sampling, gradient reduction and per-rank logs — so
-           scaling up is a config change, not a rewrite.</p>
+        <h3>Scale on demand</h3>
+        <p>Pytorch DDP under the hood, go from one GPU to a
+          full cluster with a config change, not a rewrite.
+           <!-- Scaling up is a config change,  -->
+          </p>
       </article>
       <article class="card">
-        <h3>Results you can analyse</h3>
-        <p>Every run writes the same arrays and metric logs, and the bundled analysis layer
-           reads them: training curves, ROC curves, residuals and event displays, without
-           re-running the model.</p>
+        <h3>From run to results</h3>
+        <p>Training curves to multri-ring segmentation visualization, 
+          WatChMaL ships with several bundled analysis layers.
+        </p>
       </article>
     </div>
   </section>
@@ -235,20 +236,13 @@ python main.py --config-name resnet_train -c job</pre>
   </section>
 
   <section class="band alt">
-    <h2>Selected publications</h2>
-    <p class="band-sub">
-      Machine-learning reconstruction for water Cherenkov detectors. The two most recent
-      name this framework directly.
-    </p>
+    <h2>Publications</h2>
     <ul class="papers">
       <li>
         <a href="https://arxiv.org/abs/2604.13503">Enhancing Event Reconstruction in
         Hyper-Kamiokande with Machine Learning: A ResNet Implementation</a>
         <span class="paper-meta">Atta, Prouse, Chen, Okumura, de Perio, Thrane, Urquijo ·
         arXiv:2604.13503 · 2026</span>
-        <span class="paper-note">ResNet classification and vertex, direction and momentum
-        regression, reported at 3.2–5.2 × 10<sup>4</sup> times the speed of
-        likelihood-based reconstruction. Uses WatChMaL.</span>
       </li>
       <li>
         <a href="https://arxiv.org/abs/2411.09562">Likelihood and Deep Learning Analysis of
@@ -256,8 +250,6 @@ python main.py --config-name resnet_train -c job</pre>
         (IWCD) of the Hyper-Kamiokande experiment</a>
         <span class="paper-meta">Mondal, Prouse, de Perio, Hartz, Bose, for the
         Hyper-Kamiokande Collaboration · arXiv:2411.09562 · 2024</span>
-        <span class="paper-note">Event selection with a ResNet-18 “within the WatChMaL
-        framework”, for both IWCD and the far detector.</span>
       </li>
       <li>
         <a href="https://doi.org/10.3390/psf2023008063">Machine Learning Techniques to

@@ -121,6 +121,10 @@ __MACOSX/
 # internal working notes / agent reports
 /claude_report/
 
+# quickstart dataset, fetched by setup/download_data.sh - 145 MB unpacked, and
+# regenerable from the published release, so it has no business in git.
+/data/
+
 # plotting/viz kept local, not shipped — belongs in a separate WatChMaL viz repo.
 # The graph engines import it lazily and skip plotting when it is absent.
 /watchmal/utils/viz_utils.py

@@ -11,8 +11,8 @@ testpaths = ["tests"]
 addopts = "--strict-markers"
 markers = [
     "transitional: asserts something that is only true mid-merge. MUST carry a module-level RETIRES_WITH constant naming the step that kills it. `pytest -m transitional` prints the remaining unification work.",
-    "graph: needs torch_geometric (requirements-graph.txt); skipped when it is absent.",
-    "multiring: needs spconv (requirements-multiring.txt); skipped when it is absent.",
+    "graph: needs torch_geometric (requirements-ci.txt / requirements-gpu-graph.txt / requirements-full.txt); skipped when it is absent.",
+    "multiring: needs spconv (requirements-gpu-images.txt / requirements-full.txt); skipped when it is absent.",
 ]
 
 [tool.ruff]

@@ -265,6 +265,20 @@ directly; option 2 does not, so append `-c job` to the `python main.py` call at 
 of the script (there is already a comment marking the spot); option 3 takes it on the
 command line.
 
+### Turning off the start-up banner
+
+A run opens with a short animation while the dataset loads, on an interactive terminal.
+To suppress it entirely (plain logging, nothing else changes):
+
+```bash
+export NO_WATCHMAL_BANNER=true     # also accepts 1 / yes / on
+```
+
+It already disables itself when stdout is not a TTY, so Slurm logs are unaffected either
+way. Cost when it does run: ~0.6% of one core, and no slowdown measurable above
+run-to-run noise — but it writes ~380 KiB/s of ANSI, which is worth suppressing over a
+slow SSH link.
+
 ## 4. Create your own workspace
 
 `tutorial/config/` and `tutorial/launch/` are the shipped, tracked references — **don't
@@ -273,6 +287,15 @@ gitignored (personal, never pushed). Bootstrap them from the tutorials:
 
 ```bash
 bash setup/make_dirs.sh     # copies tutorial/config/ -> config/  and  tutorial/launch/ -> launch/
+```
+
+It refuses to run if `config/` or `launch/` already exists, because the copy overwrites
+file by file and both directories are gitignored — an existing workspace would lose every
+local edit with nothing to recover from. Once you are sure (back it up first):
+
+```bash
+bash setup/make_dirs.sh --force    # or -f
+bash setup/make_dirs.sh --help
 ```
 
 Then:

@@ -17,7 +17,22 @@ set -euo pipefail
 # Root of the repo — auto-detected from this script's location
 # (<repo>/tutorial/launch/watchmal/container -> four levels up; override with NEUNET_ROOT).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${NEUNET_ROOT:-$(cd "${SCRIPT_DIR}/../../../.." && pwd)}"
+# Repo root: found by searching UPWARD for the marker files, not by counting
+# directories. setup/make_dirs.sh copies this tree from tutorial/launch/ to launch/,
+# which removes one level, so any fixed number of ".." is correct in exactly one of the
+# two locations. Override with NEUNET_ROOT to run from outside the repo.
+_find_repo_root() {
+  local dir="$1"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -f "$dir/main.py" && -d "$dir/watchmal" ]]; then printf '%s' "$dir"; return 0; fi
+    dir="$(dirname "$dir")"
+  done
+  echo "ERROR: no WatChMaL root (main.py + watchmal/) found above $1 - set NEUNET_ROOT" >&2
+  return 1
+}
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+REPO_ROOT="${NEUNET_ROOT:-$(_find_repo_root "$SCRIPT_DIR")}"
 
 RUN_SCRIPT="${SCRIPT_DIR}/train_resnet_smoke_in_container.sh"
 BIND_CODE="${REPO_ROOT}:/workspace/work/ml"

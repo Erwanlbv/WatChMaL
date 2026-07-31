@@ -26,7 +26,7 @@ from watchmal.engine.base_engine import BaseEngine
 log = logging.getLogger(__name__)
 
 
-class ReconstructionEngine(BaseEngine):
+class ImageReconstructionEngine(BaseEngine):
     def __init__(self, target_key, model, rank, device, dump_path, wandb_run=None, dataset=None):
         """
         Parameters

@@ -1,5 +1,5 @@
 from watchmal.dataset.common.h5_dataset import H5Dataset, H5TrueDataset
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 import pickle
 import time
 

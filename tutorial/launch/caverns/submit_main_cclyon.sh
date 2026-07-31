@@ -36,10 +36,25 @@
 CONDA_ENV_NAME=pt28_cuda129
 MINICONDA_PATH=/sps/t2k/eleblevec/miniconda3/
 
+# Repo root: found by searching UPWARD for the marker files, not by counting
+# directories. setup/make_dirs.sh copies this tree from tutorial/launch/ to launch/,
+# which removes one level, so any fixed number of ".." is correct in exactly one of the
+# two locations. Override with NEUNET_ROOT to run from outside the repo.
+_find_repo_root() {
+  local dir="$1"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -f "$dir/main.py" && -d "$dir/watchmal" ]]; then printf '%s' "$dir"; return 0; fi
+    dir="$(dirname "$dir")"
+  done
+  echo "ERROR: no WatChMaL root (main.py + watchmal/) found above $1 - set NEUNET_ROOT" >&2
+  return 1
+}
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Path to WatChMaL repository — auto-detected: SLURM_SUBMIT_DIR when submitted
 # with sbatch (so RUN `sbatch` FROM THE REPO ROOT), script location otherwise.
 # Override by exporting NEUNET_ROOT before sbatch if you submit from elsewhere.
-NeuNet_folder_path="${NEUNET_ROOT:-${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}}"
+NeuNet_folder_path="${NEUNET_ROOT:-${SLURM_SUBMIT_DIR:-$(_find_repo_root "$_SCRIPT_DIR")}}"
 
 # Config tree to compose from: 'tutorial/config/caverns' (shipped examples)
 # or 'config' (your own workspace, see the main README part 1 - 4.)

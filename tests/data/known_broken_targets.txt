@@ -20,8 +20,9 @@
 watchmal.dataset.dit2tvit.dit2tvit_dataset.DoubleImageDataset
 
 # tutorial/config/watchmal/engine/regression_DI.yaml
-# -> watchmal/engine/regression.py defines RegressionEngine only; no DI variant exists
-watchmal.engine.regression.RegressionDIEngine
+# -> watchmal/engine/images/regression.py defines ImageRegressionEngine only;
+#    no DI variant exists
+watchmal.engine.images.regression.ImageRegressionDIEngine
 
 # tutorial/config/watchmal/model/transformer_dit2t.yaml
 # -> the module is watchmal/model/T2TViTransformerDI.py (it does define DualT2T_ViTRegressor)

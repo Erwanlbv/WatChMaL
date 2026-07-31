@@ -1,9 +1,9 @@
 import torch
 
-from watchmal.engine.reconstruction import ReconstructionEngine
+from watchmal.engine.images.reconstruction import ImageReconstructionEngine
 
 
-class ClassifierEngine(ReconstructionEngine):
+class ImageClassifierEngine(ImageReconstructionEngine):
     """Engine for performing training or evaluation for a classification network."""
     def __init__(self, target_key, model, rank, device, dump_path, wandb_run=None, dataset=None, label_set=None):
         """
@@ -20,7 +20,7 @@ class ClassifierEngine(ReconstructionEngine):
         dump_path : string
             The path to store outputs in.
         wandb_run, dataset : optional
-            Uniform-constructor args forwarded to the base (see ReconstructionEngine).
+            Uniform-constructor args forwarded to the base (see ImageReconstructionEngine).
         label_set : sequence
             The set of possible labels to classify (if None, which is the default, then class labels in the data must be
             0 to N).

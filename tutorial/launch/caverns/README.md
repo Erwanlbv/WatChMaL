@@ -14,6 +14,7 @@ bash container/run_in_container.sh --hk --mr gpu_list=[0,1]
 
 > These are the shipped reference scripts — don't edit them in place. Copy them to your own  
 > `launch/` folder with `bash setup/make_dirs.sh` and customize there (see the main README,  
+> it refuses to overwrite an existing `launch/` unless you pass `--force`)  
 > [Part 1, step 4: Create your own workspace](../README.md#4-create-your-own-workspace)).
 
 

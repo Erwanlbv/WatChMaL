@@ -16,7 +16,7 @@ import torch_geometric.transforms as T
 
 # watchmal imports
 from watchmal.dataset.graph.pyg_concat import PyGConcatDataset
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 
 log = setup_logging(__name__)
 

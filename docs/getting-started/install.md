@@ -1,7 +1,64 @@
 # Install
 
-WatChMaL is run from a checkout, not installed as a package — there is no
-`pip install watchmal` and no `pip install -e .` today.
+Two routes are available. **Containers are the supported route** and should be preferred
+wherever a container runtime exists. A local Python environment is the fallback for
+machines where one does not.
+
+The reason is the dependency stack rather than convenience. The graph representation
+requires PyTorch Geometric together with its compiled extensions (`torch_scatter`,
+`torch_cluster`, `pyg_lib`), each built against an exact PyTorch and CUDA version; the
+sparse three-dimensional representation requires `spconv`, which is distributed as a
+separate package per CUDA build. A mismatch between any of these and the installed
+PyTorch produces a linker error at import time rather than at install time. The
+containers pin a combination that is known to work.
+
+!!! note "On CC-IN2P3"
+    The images are already present on the shared filesystem, and nothing needs to be
+    built or downloaded. Go directly to
+    [Clusters → CC-IN2P3 containers](../clusters/cc-in2p3-containers.md), which lists
+    the available images, their contents and which one each task requires.
+
+## Route 1 — container
+
+### Obtaining an image
+
+On a machine with [Apptainer](https://apptainer.org) (formerly Singularity) or Docker:
+
+```bash
+apptainer build watchmal.sif docker://ghcr.io/watchmal/watchmal:latest
+```
+
+The resulting `.sif` is a single file and can be copied between machines.
+
+!!! warning "Publication of the public images is in progress"
+    The `ghcr.io/watchmal` registry is not yet populated, so the command above does not
+    resolve at the time of writing. Until it does, the images are available on CC-IN2P3
+    at `/sps/hyperk/containers/ml/` (see
+    [Clusters](../clusters/cc-in2p3-containers.md)), and a local Python environment
+    (route 2) is the alternative elsewhere.
+
+### Running the framework inside it
+
+The repository is not built into the image; it is bound into the container at runtime, so
+edits to the code take effect without rebuilding anything.
+
+```bash
+git clone https://github.com/WatChMaL/WatChMaL.git
+cd WatChMaL
+
+apptainer exec --nv \
+  --bind "$PWD":/workspace/ml \
+  --bind /path/to/your/data:/workspace/data \
+  --pwd /workspace/ml \
+  watchmal.sif \
+  python main.py --config-name resnet_train -c job
+```
+
+`--nv` exposes the host GPU and may be omitted for CPU-only work. `--bind` makes a host
+directory visible inside the container; both the checkout and the data must be bound,
+because a container sees no host path that has not been.
+
+## Route 2 — local Python environment
 
 ```bash
 git clone https://github.com/WatChMaL/WatChMaL.git
@@ -9,82 +66,36 @@ cd WatChMaL
 pip install -r requirements.txt
 ```
 
-That base install is enough to run the **image family** end to end.
+This is sufficient for the image representation. The graph and sparse-3-D
+representations require additional packages, which are declared in further requirements
+files in the repository root; install the ones matching the representation to be used.
 
-## The dependency boundary
+`spconv` is deliberately absent from all of them, because it is published as one
+distribution per CUDA build (`spconv-cu118`, `spconv-cu120`, and so on) and pinning a
+single one would be wrong on every other machine. Install the variant matching the local
+CUDA version.
 
-The optional groups exist because most users need one family, and the heavy dependencies
-belong to the other two. This is not a convention — CI has a job that installs
-`requirements.txt` **only** and fails if anything on the image path has grown an import of
-PyTorch Geometric or `wandb`.
+!!! warning "Compiled extensions"
+    `torch_scatter`, `torch_cluster` and `pyg_lib` are C++/CUDA extensions. Installing
+    them from source against a PyTorch version other than the one they are built for is
+    the most common cause of a failed graph installation, and the failure appears as an
+    `undefined symbol` error on import rather than during installation. Prefer wheels
+    matching the installed PyTorch exactly.
 
-| File | Packages | Needed for |
-|---|---|---|
-| `requirements.txt` | `torch`, `hydra-core>=1.1`, `omegaconf`, `h5py`, `numpy`, `uproot`, `matplotlib`, `scikit-learn`, `tabulate` | everything; runs the image family on its own |
-| `requirements-graph.txt` | `torch_geometric` | graph models |
-| `requirements-graph-extensions.txt` | `torch_scatter`, `torch_cluster` | graph models that build k-NN edges or scatter-reduce |
-| `requirements-multiring.txt` | `scipy` (+ `spconv`, see below) | multi-ring sparse-3D segmentation |
-| `requirements-tracking.txt` | `wandb` | Weights & Biases logging (CSV logging needs nothing) |
-| `requirements-transformer.txt` | `timm` | ViT / Swin / T2T models |
+## Verifying the installation
 
-So a graph user runs:
-
-```bash
-pip install -r requirements.txt -r requirements-graph.txt -r requirements-graph-extensions.txt
-```
-
-!!! warning "The graph extensions are compiled, and version-fragile"
-    `torch_scatter` and `torch_cluster` are C++/CUDA extensions built against a specific
-    torch and CUDA version. Installing them from source against a mismatched torch is the
-    most common way a graph install fails. Prefer the prebuilt wheels matching your torch
-    exactly, or use a [container](../clusters/cc-in2p3-containers.md).
-
-!!! warning "`spconv` is not in any requirements file, on purpose"
-    It ships one distribution per CUDA build — `spconv-cu118`, `spconv-cu120`, … — so
-    pinning one would break every other machine. Install the one matching your CUDA:
-    `pip install spconv-cu120`. On CC-IN2P3, exactly one container provides it.
-
-## Checking the install
-
-```bash
-python -c "import torch, hydra, h5py; print(torch.__version__)"
-
-# graph extras
-python -c "import torch_geometric, torch_scatter, torch_cluster; print(torch_geometric.__version__)"
-
-# multi-ring
-python -c "import spconv; print(spconv.__version__)"
-```
-
-To check the framework itself composes, ask Hydra to print a config and exit — this
-resolves every `_target_` without training anything:
+Hydra can compose and print a configuration without executing it. This resolves every
+`_target_` in the configuration, and therefore imports every class a run would
+instantiate:
 
 ```bash
 python main.py --config-name resnet_train -c job
 ```
 
-## Running the test suite
+A successful run prints the composed configuration and exits. A `ModuleNotFoundError` or
+`undefined symbol` at this point identifies a missing or mismatched dependency before any
+data is read.
 
-The repository ships a tiered test suite. Tiers 0 and 1 need almost nothing:
+## Next
 
-```bash
-pip install pytest ruff pyyaml
-pytest tests/tier0 tests/tier1 -q
-```
-
-Tier 0 is static (compiles every module, parses every YAML, checks every `_target_`
-resolves) and takes seconds. Tier 1 checks the import and configuration contract. Tier 2
-adds CPU unit tests on the merge seams, including distributed collectives over `gloo`.
-
-## If something goes wrong
-
-- **`ModuleNotFoundError: torch_geometric`** running an image config — that should not
-  happen; it means an image-path module grew an eager PyG import. Please open an issue,
-  the `core` CI job exists to catch exactly this.
-- **`undefined symbol` from `torch_scatter`** — the compiled extension does not match your
-  torch build. Reinstall both together, or use a container.
-- **Hydra `Could not find 'X'`** — you are pointing at the wrong config tree. `main.py`
-  defaults to `tutorial/config/watchmal`; caverns configs need
-  `--config-path tutorial/config/caverns/main`.
-- **`MissingMandatoryValue` on `MASTER_PORT`** — multi-GPU runs require it to be set in
-  the config; single-GPU and CPU runs do not.
+[Quickstart](quickstart.md) trains and evaluates a model on a small published dataset.

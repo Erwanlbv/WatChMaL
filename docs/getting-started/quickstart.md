@@ -1,56 +1,63 @@
 # Quickstart
 
-Train and evaluate a graph attention network for particle ID, end to end, on a CPU. This
-is the path that has actually been run on a laptop — no GPU, no cluster.
+This page trains and evaluates a graph attention network to separate electrons from muons,
+on a published dataset, entirely on a CPU. It takes a few minutes and requires no cluster
+allocation.
 
-After [installing](install.md) the base requirements plus the graph extras:
+It assumes the framework has been [installed](install.md) by either route.
 
-```bash
-pip install -r requirements.txt -r requirements-graph.txt -r requirements-graph-extensions.txt
-```
-
-## 1. Create your workspace
-
-Never edit the shipped `tutorial/` tree. Copy it:
+## 1. Obtain the dataset
 
 ```bash
-bash setup/make_dirs.sh          # creates config/ and launch/
+bash setup/download_data.sh
 ```
 
-Both are gitignored, so your dataset paths and tweaks stay yours. The script **refuses to
-overwrite** an existing workspace — pass `--force` if you really mean it. See
-[Your own workspace](workspace.md).
+The bundle is 25 MB compressed and unpacks to about 145 MB in `data/quickstart`:
 
-## 2. Get a small dataset
+```
+data/quickstart/
+  graph/e-_200_qtxyz_pid_knn10/    200 simulated electron events
+  graph/mu-_200_qtxyz_pid_knn10/   200 simulated muon events
+  splits/pid_e_mu_400.npz          train 280 / validation 60 / test 60
+```
 
-The shipped graph datasets are tens of GB in a single `processed/data.pt`, which an
-`InMemoryDataset` loads whole — too big for a laptop. Carve a subset **on the cluster**,
-then copy the result:
+Each event is a graph: one node per struck photomultiplier tube, with features
+(charge, time, *x*, *y*, *z*), and edges to the ten nearest neighbouring tubes. The
+simulated tank has a radius of 32.4 m and a half-height of 33 m.
+
+!!! note "Publication of the bundle is in progress"
+    The release asset the script fetches is not yet published. Until it is, the script
+    accepts `--url` to point at a local or alternative copy, and the datasets can be
+    produced from any larger production with `setup/make_smoke_subset.py`.
+
+The split file indexes the two datasets **concatenated in the order the configuration
+lists them** — electrons first, then muons — so the indices are not interchangeable with a
+configuration that lists them the other way round.
+
+## 2. Create a workspace
+
+The shipped configuration tree under `tutorial/` is a reference and should not be edited.
+Copy it:
 
 ```bash
-# on the cluster, next to the big dataset
-python setup/make_smoke_subset.py SRC_DATASET_DIR DST_DATASET_DIR --n 200
-
-# inspect one without copying anything
-python setup/make_smoke_subset.py SRC_DATASET_DIR --inspect
+bash setup/make_dirs.sh
 ```
 
-200 events is about 30 MB. The carve costs a fraction of a second on a 39 GB file, and
-needs only `torch` — no PyTorch Geometric on the login node.
+This produces `config/` and `launch/`, both ignored by git, so local dataset paths are
+never committed. See [Your own workspace](workspace.md).
 
-!!! note "Feature order differs between datasets"
-    The node-feature order is **not** portable: the PID datasets are `qtxyz` (charge
-    first) while the vertex-regression one is `tqxyz` (time first). A config's
-    `charge_index` therefore does not carry across datasets. Check before reusing one.
+## 3. Point a configuration at the data
 
-## 3. Point a config at it
-
-In your `config/` copy, edit the dataset config's `graph_folder_path` to your subset, and
-the split file to a matching index list:
+In `config/caverns/data/dataset/20inch_pmt_knn5_classification.yaml`, set the two dataset
+directories and the split file:
 
 ```yaml
-# config/caverns/data/dataset/20inch_pmt_knn5_classification.yaml
-graph_folder_path: /path/to/your/smoke/subset
+split_path: data/quickstart/splits/pid_e_mu_400.npz
+
+dataset_parameters:
+  graph_folder_path:
+    - data/quickstart/graph/e-_200_qtxyz_pid_knn10
+    - data/quickstart/graph/mu-_200_qtxyz_pid_knn10
 ```
 
 ## 4. Train
@@ -62,70 +69,81 @@ python main.py \
   tasks.train.epochs=2
 ```
 
-The config runs three tasks in order: `train`, then `restore_best_state` (loads the
-best-validation checkpoint), then `evaluate`. Outputs land under
-`<dump_path>/<run-id>/outputs/`.
+!!! note "`--config-path` is required for this configuration"
+    `main.py` declares `tutorial/config/watchmal` as its default configuration path.
+    Configurations in the caverns tree, and configurations in a personal workspace, are
+    not found without an explicit `--config-path`.
+
+The configuration performs three tasks in sequence: `train`; `restore_best_state`, which
+loads the checkpoint with the lowest validation loss; and `evaluate`, which runs the test
+split. Results are written under `<dump_path>/<run-id>/outputs/`:
 
 ```
-outputs/
-  softmax.npy              per-event class probabilities
-  predicted_labels.npy     argmax of the above
-  labels.npy               truth
-  indices.npy              which events, in dataset order
-  log_train.csv            per-step training metrics
-  log_val.csv              validation metrics
+softmax.npy            per-event class probabilities
+predicted_labels.npy   the argmax of the above
+labels.npy             true labels
+indices.npy            dataset indices, in evaluation order
+log_train.csv          per-step training metrics
+log_val.csv            validation metrics
 ```
 
-!!! note "Every caverns example needs `--config-path`"
-    `main.py` declares `config_path='tutorial/config/watchmal'`, so without an explicit
-    `--config-path` Hydra looks in the wrong tree and reports a missing config.
+`indices.npy` records which event each row corresponds to. It is required because the
+evaluation order is not the dataset order under distributed execution.
 
-## 5. Read the results back
-
-The run directory is readable by the analysis layer:
+## 5. Read the results
 
 ```python
 from analysis.read import WatChMaLOutput
 
 run = WatChMaLOutput('outputs/<run-id>')
-run.plot_training_progression()          # loss/accuracy vs step, from the CSVs
+run.plot_training_progression()
 ```
 
-For classification specifically:
+For a classification run:
 
 ```python
 from analysis.classification import WatChMaLClassification
 
-c = WatChMaLClassification('outputs/<run-id>')
-c.softmaxes.shape                        # (n_events, n_classes)
+result = WatChMaLClassification('outputs/<run-id>')
+result.softmaxes.shape       # (120, 2) for the test split above
 ```
 
-There is also a script that runs the whole round trip and asserts it:
+A script performs the whole round trip and asserts that it succeeded:
 
 ```bash
 python setup/check_analysis_pipeline.py outputs/<run-id>
 ```
 
-## Where to go next
+!!! warning "The analysis layer needs `uproot` and `tabulate`"
+    `analysis/read.py` imports `uproot` and `analysis/regression.py` imports `tabulate`,
+    both at module scope. Not every container provides them; on CC-IN2P3 one image does.
+    See [containers](../clusters/cc-in2p3-containers.md#analysis-support).
 
-- [Model zoo](../model-zoo.md) — every other task, model and dataset, and how far each is
-  verified.
-- [Your own workspace](workspace.md) — how `config/` and `launch/` relate to the shipped
-  tree.
-- [Clusters](../clusters/index.md) — containers and reference data for running at scale.
+## Interpreting a two-epoch result
 
-## If something goes wrong
+Two epochs on 280 training events is a check that the pipeline runs, not a measurement of
+performance. The expected outcome is that training loss decreases, that the evaluation
+step writes the files listed above, and that the analysis layer reads them. Separation
+between electrons and muons at this scale is not meaningful.
 
-- **`Could not find 'gat_classification'`** — missing or wrong `--config-path`; see the
-  note in step 4.
-- **`FileNotFoundError` on `processed/data.pt`** — `graph_folder_path` points at a
-  directory that is not a built PyG dataset. It must contain `processed/data.pt`.
-- **`Test loader must have at least one batch`** — the split's test index list is smaller
-  than the batch size. Lower `batch_size`, or carve a bigger subset.
-- **Loss is `nan` immediately** — usually the wrong `charge_index` for the dataset, i.e.
-  the feature-order trap in step 2; the network is being fed time as charge.
-- **`import uproot` fails inside a container** — `analysis/read.py` imports it at module
-  level and not every image ships it. See
-  [containers](../clusters/cc-in2p3-containers.md#analysis-support).
-- **Two runs give different numbers with the same seed** — `num_workers > 0` plus a
-  non-deterministic op; set the deterministic mode and compare again.
+## Next
+
+- [Model zoo](../model-zoo.md) — the other tasks, models and datasets, with the extent to
+  which each has been verified.
+- [Clusters](../clusters/index.md) — containers and reference datasets for full-scale
+  training.
+
+## Common failures
+
+- **`Could not find 'gat_classification'`** — `--config-path` is missing or points at the
+  wrong tree; see the note in step 4.
+- **`FileNotFoundError` on `processed/data.pt`** — a `graph_folder_path` entry is not a
+  built PyTorch Geometric dataset directory. Each must contain `processed/data.pt`.
+- **`Test loader must have at least one batch`** — the test split is smaller than the
+  batch size. Reduce `batch_size`.
+- **Loss becomes `nan` immediately** — usually a feature-order mismatch. Node features are
+  ordered `(charge, time, x, y, z)` in this bundle, but other productions use
+  `(time, charge, x, y, z)`; a configuration that names the wrong index feeds time to the
+  network as charge.
+- **`undefined symbol` importing `torch_scatter`** — the compiled extensions do not match
+  the installed PyTorch. See [Install](install.md).

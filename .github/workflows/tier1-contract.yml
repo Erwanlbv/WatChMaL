@@ -38,10 +38,10 @@ jobs:
         include:
           - id: core
             name: core (requirements.txt only - proves the optional-dependency boundary)
-            extra_requirements: ""
+            requirements_files: "-r requirements.txt -r test-requirements.txt"
           - id: graph
             name: graph (+ torch_geometric - resolves the graph configs' targets)
-            extra_requirements: "-r requirements-graph.txt"
+            requirements_files: "-r requirements-ci.txt"
 
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +57,7 @@ jobs:
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install framework requirements (${{ matrix.id }})
-        run: pip install -r requirements.txt ${{ matrix.extra_requirements }} pytest
+        run: pip install ${{ matrix.requirements_files }}
 
       - name: Record the installed dependency set
         run: pip list

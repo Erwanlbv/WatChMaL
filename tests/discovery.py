@@ -56,10 +56,12 @@ RUN_PY = REPO_ROOT / "watchmal" / "entrypoints" / "run.py"
 # RETIRES_WITH: P5 - one config tree.
 TIER1_EXCLUDED_CONFIG_TREES = frozenset({"watchmal"})
 
-# Optional dependencies that are documented in an optional requirements file only as a
-# comment, because the distribution name is not the import name or is build-specific
-# (spconv ships as spconv-cu118 / spconv-cu120 / ...). Everything else is parsed out of
-# the requirements-*.txt files, so adding a new optional family needs no edit here.
+# Optional dependencies whose import name cannot be derived from what the requirements
+# files declare. `spconv` is published one distribution per CUDA build, so the bundles
+# name `spconv-cu121` and the parser yields `spconv_cu121` - which is not what a failing
+# import reports. `diagnostic_multiring` is an external submodule declared nowhere.
+# Everything else is parsed out of the requirements-*.txt files, so adding a new
+# optional family needs no edit here.
 _UNDECLARABLE_OPTIONAL_MODULES = frozenset({"spconv", "diagnostic_multiring"})
 
 
@@ -96,29 +98,46 @@ def python_modules() -> list[str]:
     return sorted(set(modules))
 
 
+def _requirements_file_names(path: Path) -> set[str]:
+    """Package names declared in a pip requirements file, stripped of version specs.
+
+    Skips blank/comment lines and pip global options (-r, --index-url,
+    --extra-index-url, --find-links, ...) - the GPU/CI bundles use those to pull in a
+    CUDA wheel index or chain to requirements.txt, and none of them name a package.
+    """
+    names: set[str] = set()
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith("-"):
+            continue
+        name = line
+        for sep in ("==", ">=", "<=", "~=", "!=", ">", "<", "[", ";", " "):
+            name = name.split(sep)[0]
+        name = name.strip().replace("-", "_")
+        if name:
+            names.add(name)
+    return names
+
+
 @lru_cache(maxsize=1)
 def optional_modules() -> frozenset[str]:
     """Import names that are optional by design.
 
-    Parsed from the optional requirements files (`requirements-*.txt`); the core
-    `requirements.txt` is deliberately not read, since nothing in it may be missing.
-    A module that fails to import *only* because one of these is absent is skipped
-    rather than failed, which is what lets one suite run in several dependency
-    environments.
+    Parsed from the optional requirements files (`requirements-*.txt`). A module that
+    fails to import *only* because one of these is absent is skipped rather than
+    failed, which is what lets one suite run in several dependency environments.
+
+    Core `requirements.txt` names are explicitly subtracted, not just left unread: the
+    GPU/CI bundles re-declare a version-pinned `torch` (to match a CUDA build or a
+    compiled-extension wheel index) inside a `requirements-*.txt` file, which would
+    otherwise make `torch` itself look optional. Nothing in requirements.txt may ever
+    be treated as missing-and-skippable.
     """
+    core_names = _requirements_file_names(REPO_ROOT / "requirements.txt")
     names = set(_UNDECLARABLE_OPTIONAL_MODULES)
     for req in sorted(REPO_ROOT.glob("requirements-*.txt")):
-        for raw in req.read_text().splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            name = line
-            for sep in ("==", ">=", "<=", "~=", "!=", ">", "<", "[", ";", " "):
-                name = name.split(sep)[0]
-            name = name.strip().replace("-", "_")
-            if name:
-                names.add(name)
-    return frozenset(names)
+        names |= _requirements_file_names(req)
+    return frozenset(names - core_names)
 
 
 def missing_optional_module(exc: BaseException) -> str | None:

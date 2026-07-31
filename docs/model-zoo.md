@@ -89,10 +89,12 @@ Assigning each occupied voxel to a parent ring.
 | Sparse 3-D | `SparseUNet3D` + `QueryPerVoxelSoftmaxHead` (built by `build_segmentation_model`) | `MultiRingSegEngine` | `voxel_parent_frac` | `caverns/main/multiring_segmentation_train`, `..._test` | 🟡 ships |
 
 !!! warning "Requires `spconv`, so it does not run on a laptop"
-    The sparse convolutions need `spconv`, which ships per CUDA build
-    (`spconv-cu118`, `spconv-cu120`, …) and is not in any requirements file for that
-    reason. On CC-IN2P3 exactly one container provides it — see
-    [containers](clusters/cc-in2p3-containers.md).
+    The sparse convolutions need `spconv`, which is published as one distribution per
+    CUDA build (`spconv-cu118`, `spconv-cu121`, …) with no macOS or CPU wheel at all.
+    `spconv-cu121` is declared in `requirements-gpu-images.txt` and
+    `requirements-full.txt`, and deliberately not in `requirements-ci.txt`, which is why
+    the test suite does not cover this family. On CC-IN2P3 exactly one container
+    provides it — see [containers](clusters/cc-in2p3-containers.md).
 
 Multi-ring is also the one family whose evaluation output does **not** follow the
 `.npy` contract the other two share: it delegates to an optional `diagnostic_multiring`

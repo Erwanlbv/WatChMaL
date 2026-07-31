@@ -63,24 +63,41 @@ because a container sees no host path that has not been.
 ```bash
 git clone https://github.com/WatChMaL/WatChMaL.git
 cd WatChMaL
-pip install -r requirements.txt
 ```
 
-This is sufficient for the image representation. The graph and sparse-3-D
-representations require additional packages, which are declared in further requirements
-files in the repository root; install the ones matching the representation to be used.
+Then install **one** bundle. Each is self-contained: it chains to `requirements.txt` and
+sets whichever package index it needs, so no bundle is combined with another.
 
-`spconv` is deliberately absent from all of them, because it is published as one
-distribution per CUDA build (`spconv-cu118`, `spconv-cu120`, and so on) and pinning a
-single one would be wrong on every other machine. Install the variant matching the local
-CUDA version.
+| Bundle | Installs | For |
+|---|---|---|
+| `requirements.txt` | torch, hydra, omegaconf, h5py, numpy, uproot, matplotlib, scikit-learn, tabulate | the image representation, and everything `analysis/` needs |
+| `requirements-ci.txt` | the above, CPU torch, `torch_geometric`, `wandb`, and the test tools | development on a laptop, and continuous integration |
+| `requirements-gpu-graph.txt` | CUDA torch 2.2.2, `torch_geometric`, `torch_scatter`, `torch_cluster`, `timm`, `wandb` | training graph models on a GPU |
+| `requirements-gpu-images.txt` | CUDA torch 2.2.2, `spconv-cu121`, `scipy`, `timm`, `wandb` | training image and multi-ring models on a GPU |
+| `requirements-full.txt` | both GPU bundles combined | one environment for every representation |
 
-!!! warning "Compiled extensions"
-    `torch_scatter`, `torch_cluster` and `pyg_lib` are C++/CUDA extensions. Installing
-    them from source against a PyTorch version other than the one they are built for is
-    the most common cause of a failed graph installation, and the failure appears as an
-    `undefined symbol` error on import rather than during installation. Prefer wheels
-    matching the installed PyTorch exactly.
+```bash
+pip install -r requirements-gpu-graph.txt      # for example
+```
+
+Two properties are worth noting, because they explain the shape of the table.
+
+**The GPU bundles pin `torch==2.2.2` and select a matching wheel index.** The pinned
+version is the one the cluster's own training image runs, and `torch_scatter` and
+`torch_cluster` are published as prebuilt wheels compiled against an exact PyTorch and
+CUDA combination. The `--find-links` line in those files is what selects the matching
+builds. Installing a different PyTorch alongside them produces an `undefined symbol`
+error on import rather than a failure during installation.
+
+**`requirements-ci.txt` deliberately omits `torch_scatter`, `torch_cluster`, `spconv` and
+`timm`.** None is needed by anything the test suite exercises, `spconv` has no macOS or
+CPU wheel at all, and omitting them keeps a laptop environment installable in one command.
+
+!!! note "The base install is a tested boundary"
+    `requirements.txt` alone is sufficient for the image representation, and this is
+    verified rather than intended: one continuous-integration job installs it and nothing
+    else, and fails if PyTorch Geometric or `wandb` become reachable from an eager import
+    on a shared code path.
 
 ## Verifying the installation
 

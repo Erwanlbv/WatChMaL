@@ -1,0 +1,15 @@
+# Test tooling only - no framework dependency. This is what tier0-static.yml installs
+# (it must keep working when torch/hydra/etc. cannot be installed), and it is also
+# pulled in by requirements-ci.txt for tiers 1-3.
+#
+# Named without a `requirements-` prefix on purpose: tests/discovery.py's
+# optional_modules() globs `requirements-*.txt` at the repo root to find the optional
+# ML dependency families (graph/images/tracking/...). pytest/pyyaml/ruff are not an
+# optional *framework* family - keeping this file outside the glob keeps them out of
+# that set.
+#
+#   pip install -r test-requirements.txt
+
+pytest
+pyyaml
+ruff

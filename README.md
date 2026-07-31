@@ -20,7 +20,12 @@ one engine hierarchy:
 ```bash
 git clone https://github.com/WatChMaL/WatChMaL.git
 cd WatChMaL
-pip install -r requirements.txt
+
+# one self-contained bundle; see the install page for which
+pip install -r requirements-ci.txt     # laptop / CPU development
+# pip install -r requirements-gpu-graph.txt    # GPU, graph models
+# pip install -r requirements-gpu-images.txt   # GPU, image + multi-ring
+# pip install -r requirements-full.txt         # GPU, everything
 
 # make your own (gitignored) config + launch workspace
 bash setup/make_dirs.sh

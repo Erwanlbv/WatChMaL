@@ -1,0 +1,22 @@
+# GPU bundle for the image family: CNN/ResNet + transformer image models
+# (Swin/T2T-ViT/ViT) + multi-ring (spconv) segmentation. No graph/GNN dependency
+# (torch_geometric, torch_scatter, torch_cluster) - see requirements-gpu-graph.txt for
+# that, or requirements-full.txt to run everything in one environment.
+#
+# torch is pinned to the CUDA build spconv-cu121 is compiled against. Versions taken
+# from the cluster's own training image (checked 2026-07-31 via
+# `ssh cc apptainer exec /sps/hyperk/zhu/CAVERNS/env/ml_image.sif python -c '...'`):
+# torch 2.2.2+cu121, spconv-cu121 2.3.8.
+#
+#   pip install -r requirements-gpu-images.txt
+
+--index-url https://download.pytorch.org/whl/cu121
+--extra-index-url https://pypi.org/simple
+
+-r requirements.txt
+
+torch==2.2.2
+spconv-cu121==2.3.8
+scipy       # multi-ring Hungarian matching (scipy.optimize.linear_sum_assignment)
+timm
+wandb

@@ -14,9 +14,9 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 
-# wandb is an OPTIONAL dependency (see requirements-tracking.txt). It is imported lazily
-# where it is actually used (save_state), so a run with no wandb_run - i.e. CSV-only
-# tracking - never needs the package installed.
+# wandb is an OPTIONAL dependency (see requirements-ci.txt or requirements-gpu-*.txt).
+# It is imported lazily where it is actually used (save_state), so a run with no
+# wandb_run - i.e. CSV-only tracking - never needs the package installed.
 # torch_geometric is imported lazily in build_loader, see there.
 
 # watchmal imports

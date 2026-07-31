@@ -1,0 +1,33 @@
+# Dataset config for the published quickstart bundle.
+#
+# Fetch it with `bash setup/download_data.sh`, which unpacks 200 simulated e- and 200
+# simulated mu- events into data/quickstart. Node features are (charge, time, x, y, z)
+# and the edges are k=10 nearest neighbours, already built.
+#
+# Paths are written against ${hydra:runtime.cwd} - the directory `main.py` was launched
+# from - because hydra changes the working directory to the run directory before the
+# dataset is constructed, so a plain relative path would resolve inside outputs/ and
+# fail. Run from the repository root.
+
+kind: "pyg_in_memory"
+
+split_path: ${hydra:runtime.cwd}/data/quickstart/splits/pid_e_mu_400.npz
+
+# The bundle ships graphs with edges already computed.
+fully_processed: True
+compute_edges_parameters: null
+
+# Order matters: it must match the order of graph_folder_path below, because the split
+# file indexes the two datasets after concatenation.
+target_names: ['mu-', 'e-']
+signal_key: 'e-'
+
+dataset_parameters:
+  _target_: watchmal.dataset.graph.pyg_in_memory_20inch_pmt.PyGInMemory20inchDataset
+
+  graph_file_names:
+    - data.pt
+
+  graph_folder_path:
+    - ${hydra:runtime.cwd}/data/quickstart/graph/e-_200_qtxyz_pid_knn10
+    - ${hydra:runtime.cwd}/data/quickstart/graph/mu-_200_qtxyz_pid_knn10

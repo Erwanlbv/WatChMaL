@@ -1,0 +1,58 @@
+# Quickstart: e-/mu- particle identification with a graph attention network, on the
+# published 400-event bundle, on a CPU.
+#
+#   bash setup/download_data.sh
+#   python main.py \
+#       --config-path tutorial/config/caverns/main --config-name quickstart \
+#       'hydra.searchpath=[file://tutorial/config/caverns]'
+#
+# Run it from the repository root: the dataset paths and the searchpath are both
+# resolved against the launch directory.
+#
+# This is the same pipeline as gat_classification.yaml, differing only in what it points
+# at - the published bundle rather than a cluster dataset - and in the node-feature
+# schema that follows from it. Documented at
+# https://watchmal.github.io/WatChMaL/docs/getting-started/quickstart/
+
+MASTER_PORT: 12356
+find_unused_parameters: True
+seed: 1234
+deterministic: False
+gpu_list: []          # CPU; set to [0] to use a GPU
+launch_wandb: False
+
+defaults:
+    - wandb: tutorial
+    - model: quickstart_gat_classifier
+    - engine: gnn_classifier
+
+    - data/dataset@data.dataset: quickstart_e_mu_pid
+    - data/transforms@data.transforms: quickstart_e_mu_pid
+
+    - tasks/train: gnn_train
+    - sampler@tasks.train.data_loaders.train.sampler_config: subset_random
+    - sampler@tasks.train.data_loaders.validation.sampler_config: subset_sequential
+
+    - loss@tasks.train.loss: cross_entropy
+    - optimizers@tasks.train.optimizers: adam
+
+    - scheduler@tasks.train.scheduler: reduce_lr_on_plateau
+    - scheduler@tasks.train.early_stopping: early_stopping
+
+    - tasks/restore_best_state: restore_best
+
+    - tasks/evaluate: gnn_evaluate
+    - sampler@tasks.evaluate.data_loaders.test.sampler_config: subset_sequential
+
+    - _self_
+
+# `_self_` is listed last, so these override the groups composed above.
+#
+# Nothing model-specific belongs here: the five-input-channel count lives in
+# model/quickstart_gat_classifier.yaml, so that `model=<something else>` on the command
+# line substitutes cleanly instead of carrying an in_channels the replacement rejects.
+
+tasks:
+    train:
+        # A first run should finish in under a minute; raise this for anything real.
+        epochs: 2

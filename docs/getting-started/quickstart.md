@@ -1,9 +1,9 @@
 # Quickstart
 
 This page trains and evaluates a graph attention network to separate electrons from muons,
-on a published dataset, entirely on a CPU. It takes a few minutes, requires no cluster
-allocation, and **edits no files**: everything the run needs is supplied on the command
-line.
+on a published dataset, entirely on a CPU. It takes under a minute, requires no cluster
+allocation, and needs no files to be edited: a configuration for exactly this dataset is
+shipped with the repository.
 
 It assumes the framework has been [installed](install.md) by either route.
 
@@ -30,11 +30,6 @@ The split file indexes the two datasets **concatenated in the order the configur
 lists them** — electrons first, then muons — so the indices are not interchangeable with a
 configuration that lists them the other way round.
 
-!!! note "Publication of the bundle is in progress"
-    The release asset the script fetches is not yet published. Until it is, the script
-    accepts `--url` to point at an alternative copy, and equivalent datasets can be
-    produced from any larger production with `setup/make_smoke_subset.py`.
-
 ## 2. Run
 
 From the repository root:
@@ -42,26 +37,18 @@ From the repository root:
 ```bash
 python main.py \
   --config-path tutorial/config/caverns/main \
-  --config-name gat_classification \
-  'hydra.searchpath=[file://tutorial/config/caverns]' \
-  data.dataset.split_path=$PWD/data/quickstart/splits/pid_e_mu_400.npz \
-  "data.dataset.dataset_parameters.graph_folder_path=[$PWD/data/quickstart/graph/e-_200_qtxyz_pid_knn10,$PWD/data/quickstart/graph/mu-_200_qtxyz_pid_knn10]" \
-  data.transforms.transforms.AddFeaturesInData.charge_index=0 \
-  'data.transforms.transforms.Normalize.feat_norm=[[1000,1900,3243,3243,3297],[0.01,550,-3243,-3243,-3297]]' \
-  model.in_channels=5 \
-  tasks.train.epochs=2
+  --config-name quickstart \
+  'hydra.searchpath=[file://tutorial/config/caverns]'
 ```
 
-It completes in well under a minute on a laptop CPU.
-
-Each argument is a distinct Hydra mechanism:
+It completes in well under a minute on a laptop CPU, and needs no arguments beyond
+locating the configuration.
 
 | Argument | Mechanism |
 |---|---|
-| `--config-name gat_classification` | selects the top-level configuration |
+| `--config-name quickstart` | selects the top-level configuration |
 | `--config-path .../caverns/main` | where that file lives |
 | `hydra.searchpath=[...]` | where the **config groups** it composes live |
-| `key=value` | overrides a value in the composed configuration |
 
 !!! warning "`hydra.searchpath` is required for the caverns tree"
     In this tree the entry configurations sit in `main/` while the config groups they
@@ -71,25 +58,33 @@ Each argument is a distinct Hydra mechanism:
     `Could not find 'sampler/subset_sequential'`. That path is resolved against the
     working directory, so run from the repository root.
 
-!!! warning "Data paths must be absolute"
-    Hydra changes the working directory for the job, to the run directory it creates
-    under `outputs/`. A relative dataset path is therefore resolved from inside that
-    directory and fails with `FileNotFoundError`, hence `$PWD` above. Setting
-    `hydra.job.chdir=false` also makes relative paths work, but it changes where the run
-    writes its results and the analysis tooling then cannot find them — prefer absolute
-    paths.
-
-!!! note "Why the three schema overrides"
-    The shipped configuration was written for graphs carrying **two** node features,
-    time and charge, with the geometry held on the edges. The published bundle carries
-    **five** — charge, time, *x*, *y*, *z* — so three values have to move with it:
-    `charge_index` (charge is first here, not second), `feat_norm` (normalisation bounds
-    for five features rather than two), and the model's `in_channels`. Without them the
-    run fails with `IndexError: index 2 is out of bounds for dimension 1 with size 2`.
-
 The configuration performs three tasks in sequence: `train`; `restore_best_state`, which
 loads the checkpoint with the lowest validation loss; and `evaluate`, which runs the test
 split.
+
+### What `quickstart` differs in
+
+It is `gat_classification` pointed at the published bundle. Two details are worth reading
+before adapting it to your own data, because both are easy to get wrong and neither fails
+in an obvious way.
+
+**Dataset paths are written against `${hydra:runtime.cwd}`.** Hydra changes the working
+directory for the job, to the run directory it creates under `outputs/`, *before* the
+dataset is constructed. A plain relative path would therefore resolve inside `outputs/`
+and fail with `FileNotFoundError`. `${hydra:runtime.cwd}` interpolates the directory
+`main.py` was launched from, which is why the command must be run from the repository
+root. Absolute paths work equally well; `hydra.job.chdir=false` also makes relative paths
+resolve, but it moves where results are written and the analysis tooling then cannot find
+them.
+
+**The node-feature schema is not the shipped one.** `20inch_pmt_classification` describes
+graphs with **two** node features, time and charge, with the geometry carried on the
+edges. The published bundle carries **five** — charge, time, *x*, *y*, *z*. Three values
+follow from that difference, and they live in
+`data/transforms/quickstart_e_mu_pid.yaml` and the entry config: `charge_index` (charge
+is first here, not second), `feat_norm` (bounds for five features rather than two), and
+the model's `in_channels`. Feeding this bundle through the two-feature transforms raises
+`IndexError: index 2 is out of bounds for dimension 1 with size 2`.
 
 ## 3. What the run writes
 
@@ -164,17 +159,20 @@ copy of a configuration is made.
 so it also verifies that every class the run would instantiate can be imported:
 
 ```bash
-python main.py --config-path tutorial/config/caverns/main --config-name gat_classification \
+python main.py --config-path tutorial/config/caverns/main --config-name quickstart \
   'hydra.searchpath=[file://tutorial/config/caverns]' -c job
 ```
 
 **Substitute a whole config group.** A group is a directory of alternatives; naming one
-replaces the entire subtree. Here the graph attention network is exchanged for a graph
-convolutional network:
+replaces the entire subtree — here the optimiser:
 
 ```bash
-... model=gcn_classifier
+... optimizers@tasks.train.optimizers=adam_lr1e-3
 ```
+
+The `model` group substitutes the same way, but a model must declare the right number of
+input features for the dataset: `model=gcn_classifier` composes cleanly and then fails at
+runtime, because that configuration declares two where this bundle has five.
 
 **Override nested values**, at any depth, using dotted paths:
 
@@ -193,11 +191,11 @@ convolutional network:
 per combination, each in its own output directory:
 
 ```bash
-python main.py --config-path tutorial/config/caverns/main --config-name gat_classification \
+python main.py --config-path tutorial/config/caverns/main --config-name quickstart \
   'hydra.searchpath=[file://tutorial/config/caverns]' \
   --multirun \
-  model=vanilla_gat_classifier,gcn_classifier \
-  tasks.train.optimizers.lr=1e-3,1e-4
+  tasks.train.optimizers.lr=1e-3,1e-4 \
+  tasks.train.epochs=2,4
 ```
 
 That is four runs. A hyper-parameter scan therefore requires no new configuration files

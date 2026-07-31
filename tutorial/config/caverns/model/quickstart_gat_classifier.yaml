@@ -1,0 +1,22 @@
+# Graph attention network sized for the published quickstart bundle.
+#
+# Identical to vanilla_gat_classifier.yaml except for in_channels: that bundle carries
+# five node features (charge, time, x, y, z) where the cluster datasets the other config
+# targets carry two (time, charge), the geometry being held on their edges.
+#
+# The count lives in a model config rather than as an override on the entry config so
+# that substituting the model group - `model=gcn_classifier` - stays clean; an override
+# would follow the substitution and hand an unexpected `in_channels` to whatever
+# replaced this.
+
+_target_: watchmal.model.gat.GraphAttentionNetwork
+
+hidden_channels: 20
+num_heads: 4
+num_layers: 3
+in_channels: 5          # (charge, time, x, y, z)
+out_channels: 2         # e- / mu-
+
+use_nhits: True
+use_event_total_charge: True
+attention_type: 'vanilla'  # Options: 'vanilla' or 'concat_and_wo_mlp'

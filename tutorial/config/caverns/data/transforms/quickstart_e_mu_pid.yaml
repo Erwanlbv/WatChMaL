@@ -1,0 +1,46 @@
+# Transforms for the published quickstart bundle.
+#
+# Differs from 20inch_pmt_classification.yaml in one respect that matters: that config
+# describes graphs with TWO node features, (time, charge), with the geometry carried on
+# the edges. The quickstart bundle carries FIVE, (charge, time, x, y, z), so both the
+# charge index and the normalisation bounds move with it. Feeding this data through the
+# two-feature config raises
+#   IndexError: index 2 is out of bounds for dimension 1 with size 2
+
+transforms:
+
+  # Graph-level features appended to the node features by the model.
+  AddFeaturesInData:
+    _target_: watchmal.dataset.graph.pyg_transformations.AddFeaturesInData
+    charge_index: 0          # charge is the FIRST feature in this bundle, not the second
+    feature_names:
+      - 'n_hits'
+      - 'event_total_charge'
+    max_vals: [6000., 12000]
+    min_vals: [120., 140]
+
+  Normalize:
+    _target_: watchmal.dataset.graph.pyg_transformations.Normalize
+    eps: !!float 1e-10
+
+    # One entry per node feature: charge spans four decades, so it is normalised in log
+    # space; time and the coordinates are linear.
+    apply_log: [True, False, False, False, False]
+
+    # Row 0 is the maximum of each feature, row 1 the minimum. The coordinate bounds are
+    # the tank itself: 3243 cm in radius, 3296 cm half-height.
+    feat_norm:
+      - [1000, 1900,  3243,  3243,  3297]
+      - [0.01,  550, -3243, -3243, -3297]
+
+  # PDG codes in the bundle map to class indices in this order.
+  MapLabels:
+    _target_: watchmal.dataset.graph.pyg_transformations.MapLabels
+    label_set:
+      - 13  # mu-
+      - 11  # e-
+
+  ConvertAndToDict:
+    _target_: watchmal.dataset.graph.pyg_transformations.ConvertAndToDict
+    feature_to_type: float32
+    target_to_type: int64

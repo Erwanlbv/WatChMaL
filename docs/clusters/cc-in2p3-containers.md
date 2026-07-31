@@ -89,7 +89,8 @@ apptainer exec --nv \
   --bind /path/to/your/data:/workspace/work/data \
   --pwd /workspace/work/ml \
   /sps/hyperk/containers/ml/<IMAGE>.sif \
-  python main.py --config-path config/caverns/main --config-name <NAME>
+  python main.py --config-path config/caverns/main --config-name <NAME> \
+    'hydra.searchpath=[file://config/caverns]'
 ```
 
 Add `--bind /sps:/sps` if your configs reference `/sps` paths directly rather than through

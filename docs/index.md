@@ -46,7 +46,8 @@ representation added later.
 ```bash
 python main.py \
   --config-path tutorial/config/caverns/main \
-  --config-name gat_classification
+  --config-name gat_classification \
+  'hydra.searchpath=[file://tutorial/config/caverns]'
 ```
 
 Configuration values may be overridden on the command line, so a parameter scan requires
@@ -55,6 +56,7 @@ no additional files:
 ```bash
 python main.py --config-path tutorial/config/caverns/main \
   --config-name gat_classification \
+  'hydra.searchpath=[file://tutorial/config/caverns]' \
   tasks.train.epochs=40 tasks.train.optimizers.lr=1e-4
 ```
 

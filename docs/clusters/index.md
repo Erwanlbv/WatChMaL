@@ -48,7 +48,8 @@ apptainer exec --nv \
   --bind /path/to/your/data:/workspace/work/data \
   --pwd /workspace/work/ml \
   /sps/hyperk/containers/ml/<IMAGE>.sif \
-  python main.py --config-path config/caverns/main --config-name gat_classification
+  python main.py --config-path config/caverns/main --config-name gat_classification \
+    'hydra.searchpath=[file://config/caverns]'
 ```
 
 Ready-made wrappers live in `tutorial/launch/` (copy them to `launch/` with

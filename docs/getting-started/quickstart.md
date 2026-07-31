@@ -1,8 +1,9 @@
 # Quickstart
 
 This page trains and evaluates a graph attention network to separate electrons from muons,
-on a published dataset, entirely on a CPU. It takes a few minutes and requires no cluster
-allocation.
+on a published dataset, entirely on a CPU. It takes a few minutes, requires no cluster
+allocation, and **edits no files**: everything the run needs is supplied on the command
+line.
 
 It assumes the framework has been [installed](install.md) by either route.
 
@@ -25,58 +26,52 @@ Each event is a graph: one node per struck photomultiplier tube, with features
 (charge, time, *x*, *y*, *z*), and edges to the ten nearest neighbouring tubes. The
 simulated tank has a radius of 32.4 m and a half-height of 33 m.
 
-!!! note "Publication of the bundle is in progress"
-    The release asset the script fetches is not yet published. Until it is, the script
-    accepts `--url` to point at a local or alternative copy, and the datasets can be
-    produced from any larger production with `setup/make_smoke_subset.py`.
-
 The split file indexes the two datasets **concatenated in the order the configuration
 lists them** — electrons first, then muons — so the indices are not interchangeable with a
 configuration that lists them the other way round.
 
-## 2. Create a workspace
+!!! note "Publication of the bundle is in progress"
+    The release asset the script fetches is not yet published. Until it is, the script
+    accepts `--url` to point at an alternative copy, and equivalent datasets can be
+    produced from any larger production with `setup/make_smoke_subset.py`.
 
-The shipped configuration tree under `tutorial/` is a reference and should not be edited.
-Copy it:
-
-```bash
-bash setup/make_dirs.sh
-```
-
-This produces `config/` and `launch/`, both ignored by git, so local dataset paths are
-never committed. See [Your own workspace](workspace.md).
-
-## 3. Point a configuration at the data
-
-In `config/caverns/data/dataset/20inch_pmt_knn5_classification.yaml`, set the two dataset
-directories and the split file:
-
-```yaml
-split_path: data/quickstart/splits/pid_e_mu_400.npz
-
-dataset_parameters:
-  graph_folder_path:
-    - data/quickstart/graph/e-_200_qtxyz_pid_knn10
-    - data/quickstart/graph/mu-_200_qtxyz_pid_knn10
-```
-
-## 4. Train
+## 2. Run
 
 ```bash
 python main.py \
-  --config-path config/caverns/main \
+  --config-path tutorial/config/caverns/main \
   --config-name gat_classification \
+  'hydra.searchpath=[file://tutorial/config/caverns]' \
+  data.dataset.split_path=data/quickstart/splits/pid_e_mu_400.npz \
+  'data.dataset.dataset_parameters.graph_folder_path=[data/quickstart/graph/e-_200_qtxyz_pid_knn10,data/quickstart/graph/mu-_200_qtxyz_pid_knn10]' \
   tasks.train.epochs=2
 ```
 
-!!! note "`--config-path` is required for this configuration"
-    `main.py` declares `tutorial/config/watchmal` as its default configuration path.
-    Configurations in the caverns tree, and configurations in a personal workspace, are
-    not found without an explicit `--config-path`.
+Four things are happening in that command, and each is a Hydra mechanism worth
+recognising:
+
+| Argument | Mechanism |
+|---|---|
+| `--config-name gat_classification` | selects the top-level configuration |
+| `--config-path .../caverns/main` | where that file lives |
+| `hydra.searchpath=[...]` | where the **config groups** it composes live |
+| `key=value` | overrides a value in the composed configuration |
+
+!!! warning "`hydra.searchpath` is required for the caverns tree"
+    In this tree the entry configurations sit in `main/` while the config groups they
+    compose (`model/`, `engine/`, `sampler/`, …) sit one level above, in
+    `tutorial/config/caverns/`. `--config-path` only establishes where the entry file is;
+    without `hydra.searchpath` pointing at the parent, composition fails with
+    `Could not find 'sampler/subset_sequential'`. The path is resolved relative to the
+    working directory, so run from the repository root.
 
 The configuration performs three tasks in sequence: `train`; `restore_best_state`, which
 loads the checkpoint with the lowest validation loss; and `evaluate`, which runs the test
-split. Results are written under `<dump_path>/<run-id>/outputs/`:
+split.
+
+## 3. What the run writes
+
+Under `<dump_path>/<run-id>/outputs/`:
 
 ```
 softmax.npy            per-event class probabilities
@@ -90,7 +85,7 @@ log_val.csv            validation metrics
 `indices.npy` records which event each row corresponds to. It is required because the
 evaluation order is not the dataset order under distributed execution.
 
-## 5. Read the results
+## 4. Read the results
 
 ```python
 from analysis.read import WatChMaLOutput
@@ -119,12 +114,79 @@ python setup/check_analysis_pipeline.py outputs/<run-id>
     both at module scope. Not every container provides them; on CC-IN2P3 one image does.
     See [containers](../clusters/cc-in2p3-containers.md#analysis-support).
 
-## Interpreting a two-epoch result
+## 5. Varying the run without editing anything
 
-Two epochs on 280 training events is a check that the pipeline runs, not a measurement of
-performance. The expected outcome is that training loss decreases, that the evaluation
-step writes the files listed above, and that the analysis layer reads them. Separation
-between electrons and muons at this scale is not meaningful.
+Everything below is a command-line change. No file in the repository is modified, and no
+copy of a configuration is made.
+
+**Inspect the composed configuration before running it.** This resolves every `_target_`,
+so it also verifies that every class the run would instantiate can be imported:
+
+```bash
+python main.py --config-path tutorial/config/caverns/main --config-name gat_classification \
+  'hydra.searchpath=[file://tutorial/config/caverns]' -c job
+```
+
+**Substitute a whole config group.** A group is a directory of alternatives; naming one
+replaces the entire subtree. Here the graph attention network is exchanged for a graph
+convolutional network:
+
+```bash
+... model=gcn_classifier
+```
+
+**Override nested values**, at any depth, using dotted paths:
+
+```bash
+... tasks.train.epochs=40 tasks.train.optimizers.lr=1e-4 data.dataset.dataset_parameters.batch_size=32
+```
+
+**Add or remove a key** that the configuration does not already define, with `+` and `~`:
+
+```bash
+... +tasks.train.num_val_batches=8      # add
+... ~tasks.train.early_stopping         # remove
+```
+
+**Sweep.** `--multirun` executes the cartesian product of comma-separated values, one run
+per combination, each in its own output directory:
+
+```bash
+python main.py --config-path tutorial/config/caverns/main --config-name gat_classification \
+  'hydra.searchpath=[file://tutorial/config/caverns]' \
+  --multirun \
+  model=vanilla_gat_classifier,gcn_classifier \
+  tasks.train.optimizers.lr=1e-3,1e-4
+```
+
+That is four runs. A hyper-parameter scan therefore requires no new configuration files
+and no shell loop.
+
+!!! note "`--multirun` and `-c job` are mutually exclusive"
+    Hydra permits only one of `--run`, `--multirun`, `--cfg` and `--info` per invocation.
+    A sweep cannot be previewed with `-c job`; inspect a single combination first, then
+    drop `-c job` and add `--multirun`.
+
+Full command-line documentation is available from Hydra itself:
+
+```bash
+python main.py --hydra-help
+```
+
+## 6. When to make a workspace instead
+
+Command-line overrides suit exploration and anything scripted. Once a set of values is
+settled — a dataset path used every day, an optimiser configuration worth keeping — it
+belongs in a file rather than in shell history.
+
+```bash
+bash setup/make_dirs.sh
+```
+
+produces `config/` and `launch/`, copies of the shipped trees that are ignored by git, so
+local paths are never committed. Configurations there are used by pointing
+`--config-path` and `hydra.searchpath` at them instead. See
+[Your own workspace](workspace.md).
 
 ## Next
 
@@ -133,17 +195,28 @@ between electrons and muons at this scale is not meaningful.
 - [Clusters](../clusters/index.md) — containers and reference datasets for full-scale
   training.
 
+## Interpreting a two-epoch result
+
+Two epochs on 280 training events is a check that the pipeline runs, not a measurement of
+performance. The expected outcome is that the training loss decreases, that the evaluation
+step writes the files listed above, and that the analysis layer reads them. Separation
+between electrons and muons at this scale is not meaningful.
+
 ## Common failures
 
-- **`Could not find 'gat_classification'`** — `--config-path` is missing or points at the
-  wrong tree; see the note in step 4.
+- **`Could not find 'sampler/subset_sequential'`** — `hydra.searchpath` is missing; see the
+  warning in step 2.
+- **`Could not find 'gat_classification'`** — `--config-path` is missing or names the wrong
+  tree. `main.py` defaults to `tutorial/config/watchmal`.
 - **`FileNotFoundError` on `processed/data.pt`** — a `graph_folder_path` entry is not a
   built PyTorch Geometric dataset directory. Each must contain `processed/data.pt`.
 - **`Test loader must have at least one batch`** — the test split is smaller than the
   batch size. Reduce `batch_size`.
+- **A list override has no effect** — the shell split it on the commas. Quote the whole
+  argument: `'key=[a,b]'`.
 - **Loss becomes `nan` immediately** — usually a feature-order mismatch. Node features are
   ordered `(charge, time, x, y, z)` in this bundle, but other productions use
-  `(time, charge, x, y, z)`; a configuration that names the wrong index feeds time to the
+  `(time, charge, x, y, z)`; a configuration naming the wrong index feeds time to the
   network as charge.
 - **`undefined symbol` importing `torch_scatter`** — the compiled extensions do not match
   the installed PyTorch. See [Install](install.md).

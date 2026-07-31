@@ -216,14 +216,15 @@
 <pre><span class="c"># train a graph attention network for particle ID</span>
 python main.py \
   --config-path tutorial/config/caverns/main \
-  --config-name gat_classification
+  --config-name gat_classification \
+  'hydra.searchpath=[file://tutorial/config/caverns]'
 
 <span class="c"># same model, different learning rate and 40 epochs</span>
 python main.py \
   --config-path tutorial/config/caverns/main \
   --config-name gat_classification \
-  tasks.train.optimizers.lr=1e-4 \
-  tasks.train.epochs=40
+  'hydra.searchpath=[file://tutorial/config/caverns]' \
+  tasks.train.optimizers.lr=1e-4 tasks.train.epochs=40
 
 <span class="c"># print the fully composed config and exit</span>
 python main.py --config-name resnet_train -c job</pre>

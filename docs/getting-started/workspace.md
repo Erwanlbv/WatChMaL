@@ -40,10 +40,12 @@ Point `--config-path` at your copy instead of the tutorial tree:
 
 ```bash
 # shipped reference
-python main.py --config-path tutorial/config/caverns/main --config-name gat_classification
+python main.py --config-path tutorial/config/caverns/main --config-name gat_classification \
+  'hydra.searchpath=[file://tutorial/config/caverns]'
 
 # your copy
-python main.py --config-path config/caverns/main --config-name gat_classification
+python main.py --config-path config/caverns/main --config-name gat_classification \
+  'hydra.searchpath=[file://config/caverns]'
 ```
 
 The launch scripts find the repository root by searching upward from their own location,

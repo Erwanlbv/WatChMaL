@@ -37,10 +37,6 @@ It provides PyTorch 2.2.2 (CUDA 12.1), PyTorch Geometric 2.5.3 with `torch_scatt
 `torch_cluster`, `spconv` 2.3.8, `timm`, `wandb`, `h5py`, `scikit-learn`, `scipy` and
 `matplotlib` — that is, every representation and every model family in one environment.
 
-!!! note "`oras://`, not `docker://`"
-    The image is stored as a native Apptainer `.sif` rather than an OCI image, so it is
-    fetched with the `oras://` transport. `docker://` will not resolve it.
-
 !!! warning "Two packages the analysis layer needs are absent"
     `analysis/read.py` imports `uproot` and `analysis/regression.py` imports `tabulate`,
     both at module scope, and neither is in this image. Training and evaluation are
@@ -107,15 +103,8 @@ CPU wheel at all, and omitting them keeps a laptop environment installable in on
 
 !!! note "To run something quickly on a CPU, install `requirements-ci.txt`"
     It fetches CPU PyTorch wheels and adds PyTorch Geometric, which is what the
-    [quickstart](quickstart.md) needs — that example trains a *graph* model, and
-    `requirements.txt` alone does not provide one. Verified in a clean environment:
-    setup → train → evaluate → analysis all succeed.
+    [quickstart](quickstart.md) needs — that example trains a *graph* model.
 
-!!! note "The base install is a tested boundary"
-    `requirements.txt` alone is sufficient for the **image** representation, and this is
-    verified rather than intended: one continuous-integration job installs it and nothing
-    else, and fails if PyTorch Geometric or `wandb` become reachable from an eager import
-    on a shared code path. A graph or multi-ring run needs the corresponding bundle.
 
 ## Verifying the installation
 

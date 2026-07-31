@@ -89,7 +89,7 @@ sets whichever package index it needs, so no bundle is combined with another.
 | `requirements-full.txt` | both GPU bundles combined | one environment for every representation |
 
 ```bash
-pip install -r requirements.txt  # example, install a local torch-cpu version 
+pip install -r requirements-ci.txt   # CPU torch + graph support; what the quickstart needs
 ```
 
 <!-- Two properties are worth noting, because they explain the shape of the table.
@@ -105,10 +105,17 @@ error on import rather than a failure during installation.
 `timm`.** None is needed by anything the test suite exercises, `spconv` has no macOS or
 CPU wheel at all, and omitting them keeps a laptop environment installable in one command. -->
 
+!!! note "To run something quickly on a CPU, install `requirements-ci.txt`"
+    It fetches CPU PyTorch wheels and adds PyTorch Geometric, which is what the
+    [quickstart](quickstart.md) needs — that example trains a *graph* model, and
+    `requirements.txt` alone does not provide one. Verified in a clean environment:
+    setup → train → evaluate → analysis all succeed.
+
 !!! note "The base install is a tested boundary"
-    `requirements.txt` alone is sufficient for the image representation, this 
-    is the recommended install if you want to run quickly some test locally
-    on cpu. (setup -> train -> eval -> analysis)
+    `requirements.txt` alone is sufficient for the **image** representation, and this is
+    verified rather than intended: one continuous-integration job installs it and nothing
+    else, and fails if PyTorch Geometric or `wandb` become reachable from an eager import
+    on a shared code path. A graph or multi-ring run needs the corresponding bundle.
 
 ## Verifying the installation
 

@@ -5,9 +5,14 @@ on a published dataset, entirely on a CPU. It takes under a minute, requires no 
 allocation, and needs no files to be edited. 
 A configuration for exactly this dataset is shipped with the repository.
 
-It assumes the framework has been [installed](install.md) by either route. 
-_(If you want to run something quicly we recommend to skip the apptainer container
-installation and use Route 2)_
+It assumes the framework has been [installed](install.md) by either route.
+_(To run it quickly, we recommend skipping the Apptainer container and using Route 2.)_
+
+!!! note "This example needs `requirements-ci.txt`"
+    It trains a **graph** model, so PyTorch Geometric is required and `requirements.txt`
+    alone is not enough — the run stops at
+    `ModuleNotFoundError: No module named 'torch_geometric'`. On a laptop:
+    `pip install -r requirements-ci.txt`, which also selects CPU PyTorch wheels.
 
 ## 1. Obtain the dataset
 
@@ -34,7 +39,7 @@ configuration that lists them the other way round.
 
 ## 2. Run
 
-From the repository root (remember to active your python environnement):
+From the repository root (remember to activate your Python environment):
 
 ```bash
 python main.py \
@@ -110,7 +115,7 @@ outputs/2026-07-31/13-37-06/
 `indices.npy` records which event each row corresponds to. It is required because the
 evaluation order is not the dataset order under distributed execution.
 
-Duplicated information (`preds` and `softmax`) are written on purpose: the raw values retain scale
+The duplication between `preds` and `softmax` is deliberate: the raw values retain scale
 information that the softmax discards, which matters when debugging a model, while
 `analysis/` keys on `softmax`.
 
@@ -154,10 +159,10 @@ Plots are written to `plots/<run-name>/`.
 
 ## 5. Varying the run without editing anything
 
-Hydra enables to change the config compose throught CLI, hence without changing any configuration 
-file. 
+Hydra composes the configuration at launch, so it can be changed from the command line
+without editing any configuration file.
 
-**-c job :iInspect the composed configuration before running it.** This resolves every `_target_`,
+**Use -c job to inspect the composed configuration before running it.** This resolves every `_target_`,
 so it also verifies that every class the run would instantiate can be imported:
 
 ```bash
@@ -187,16 +192,6 @@ The `model` group substitutes the same way.
 ... '~tasks.train.early_stopping'                              # remove
 ```
 
-!!! warning "What may be added to a task, and what may not"
-    `run.py` removes `data_loaders`, `optimizers`, `scheduler`, `loss` and
-    `early_stopping` from a task's configuration and handles each itself; **everything
-    left over is passed to the engine method as keyword arguments**. A key added directly
-    under `tasks.train` must therefore be a parameter that method accepts — for the graph
-    engine, `epochs`, `val_interval` and `checkpointing`, and nothing else. Adding
-    `+tasks.train.num_val_batches=8` composes without complaint and then fails with a
-    `TypeError` after the data has loaded. Adding *inside* one of the five removed keys,
-    as above, is safe.
-
 ### All of it at once
 
 The mechanisms combine in one invocation. This substitutes the optimiser group, overrides
@@ -222,8 +217,8 @@ python main.py \
 | `+...persistent_workers=False` | adds a key the configuration did not define |
 | `'~tasks.train.early_stopping'` | removes a key |
 
-Every run records the configuration it was actually given, so the overrides can be
-confirmed after the fact rather than trusted:
+_Every run records the configuration it was actually given, so the overrides can be
+confirmed after the fact:_
 
 ```bash
 grep -E "epochs:|batch_size:|persistent_workers:|lr:" outputs/<date>/<time>/.hydra/config.yaml
@@ -254,11 +249,12 @@ and no shell loop.
     A sweep cannot be previewed with `-c job`; inspect a single combination first, then
     drop `-c job` and add `--multirun`.
 
-Full command-line documentation is available from Hydra itself:
 
-```bash
-python main.py --hydra-help
-```
+!!! warning "Using wandb sweep [sweep](https://docs.wandb.ai/models/sweeps)"
+    WatChMaL also support the sweep package from Weights and Biases for more
+    complex multiruns. The documentation is being built but feel free to contact
+    one of the administators for more informations.
+
 
 
 ## Next
@@ -270,7 +266,7 @@ python main.py --hydra-help
   training.
 
 
-## Common failures
+<!-- ## Common failures
 
 - **`Could not find 'sampler/subset_sequential'`** — `hydra.searchpath` is missing; see the
   warning in step 2.
@@ -296,4 +292,4 @@ python main.py --hydra-help
   `(time, charge, x, y, z)`; a configuration naming the wrong index feeds time to the
   network as charge.
 - **`undefined symbol` importing `torch_scatter`** — the compiled extensions do not match
-  the installed PyTorch. See [Install](install.md).
+  the installed PyTorch. See [Install](install.md). -->

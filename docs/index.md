@@ -74,6 +74,6 @@ individual tasks, the configuration reference and the extension guides are in
 preparation.
 
 Capability that is implemented but not exercised by any shipped configuration is
-recorded as such rather than omitted; the [model zoo](model-zoo.md) states, for every
-task, whether it has been run end to end, whether it is only verified to compose, or
-whether no working configuration exists.
+recorded as such in the [model zoo](model-zoo.md) states. The model zoo also indicates 
+for every task whether it has been run end to end, whether it is only verified to compose, 
+or whether no working configuration exists.

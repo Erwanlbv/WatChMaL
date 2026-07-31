@@ -18,7 +18,11 @@
 set -euo pipefail
 
 DEST="data/quickstart"
-URL="https://github.com/WatChMaL/WatChMaL/releases/download/quickstart-data-v1/watchmal-quickstart-v1.tar.gz"
+# Hosted on the fork for now: release assets have to live on a repository you can
+# write to, and the upstream WatChMaL/WatChMaL repo is not that yet. Repoint this at
+# WatChMaL/WatChMaL once the bundle is published there; the checksum below does not
+# change, since it is the same archive.
+URL="https://github.com/Erwanlbv/WatChMaL/releases/download/quickstart-data-v1/watchmal-quickstart-v1.tar.gz"
 EXPECTED_SHA="b26d97c9c30fba3becf2ecda2e4b4636375f8e1aeacd13de60937c2e6624377a"
 
 while [[ $# -gt 0 ]]; do

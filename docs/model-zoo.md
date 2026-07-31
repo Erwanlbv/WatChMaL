@@ -13,7 +13,9 @@ and **how far it has actually been verified**.
 | ⛔ **broken** | A config exists but its `_target_` does not resolve. Tracked in `tests/data/known_broken_targets.txt` |
 
 The distinction between ✅ and 🟡 is deliberate. A config that composes is not a config
-that trains; CI proves the former, and only a run proves the latter.
+that trains.
+✅ refers to config that run
+🟡 refers to config that compose.
 
 ---
 
@@ -58,8 +60,8 @@ Regressing the interaction vertex position.
 !!! warning "Component vs quantity naming"
     `analysis/regression.py` keys on the **quantity** (`predicted_positions`, shape
     `(N, 3)`), whereas the graph configs name targets **per component** (`vtx_x`, `vtx_y`,
-    `vtx_z`). Same numbers, different granularity. The graph engines now write both; set
-    `predictions_name: positions` to match the shipped analysis classes exactly.
+    `vtx_z`). The graph engines write both; set `predictions_name: positions` to match 
+    the shipped analysis classes exactly.
 
 ---
 
@@ -72,7 +74,7 @@ is supported by the code. But the only shipped config that mentions energies is
 `watchmal/engine/regression_DI.yaml`, whose `_target_`
 (`watchmal.engine.images.regression.ImageRegressionDIEngine`) **does not exist** — it is
 one of three ledgered broken targets, all belonging to an unfinished dual-image (DI)
-feature that predates the unified core.
+feature that predates the unified core. (work is ongoing, [PR#97](https://github.com/WatChMaL/WatChMaL/pull/97) and [PR#93](https://github.com/WatChMaL/WatChMaL/pull/93#pullrequestreview-4826434530))
 
 To run energy regression today you would copy `engine/regression.yaml`, set
 `target_key: 'energies'` and choose a `target_scale_factor`. That path is untested; treat
@@ -90,15 +92,16 @@ Assigning each occupied voxel to a parent ring.
 
 !!! warning "Requires `spconv`, so it does not run on a laptop"
     The sparse convolutions need `spconv`, which is published as one distribution per
-    CUDA build (`spconv-cu118`, `spconv-cu121`, …) with no macOS or CPU wheel at all.
+    CUDA build (`spconv-cu118`, `spconv-cu121`, …).
     `spconv-cu121` is declared in `requirements-gpu-images.txt` and
     `requirements-full.txt`, and deliberately not in `requirements-ci.txt`, which is why
     the test suite does not cover this family. On CC-IN2P3 exactly one container
-    provides it — see [containers](clusters/cc-in2p3-containers.md).
+    provides it — see [containers](clusters/cc-in2p3-containers.md). For other cluster
+    contact your administator.
 
 Multi-ring is also the one family whose evaluation output does **not** follow the
 `.npy` contract the other two share: it delegates to an optional `diagnostic_multiring`
-submodule, so `analysis/` cannot read its results directly.
+submodule, [diagnostic multiring](https://github.com/Erwanlbv/caverns-diagnosis-public-) so `analysis/` cannot read its results directly. Please refer to the dedicated documentation on this external repository.
 
 ---
 
@@ -131,6 +134,5 @@ appears, and equally if one of these is fixed without removing its ledger line.
 
 ## What is not here yet
 
-Benchmark numbers and downloadable checkpoints. This table records *what runs*, not *how
-well* — per-task metrics and trained weights are the next thing to add, and the columns
-are deliberately shaped to take them without a restructure.
+Benchmark numbers and downloadable checkpoints. This table records *what runs*, not the performances
+to expect. Work on-going, stay tuned.

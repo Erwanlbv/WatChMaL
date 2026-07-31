@@ -22,20 +22,32 @@ containers pin a combination that is known to work.
 
 ### Obtaining an image
 
-On a machine with [Apptainer](https://apptainer.org) (formerly Singularity) or Docker:
+One image covers all three representations. On a machine with
+[Apptainer](https://apptainer.org) (formerly Singularity):
 
 ```bash
-apptainer build watchmal.sif docker://ghcr.io/watchmal/watchmal:latest
+apptainer pull ml_image.sif oras://ghcr.io/erwanlbv/watchmal-ml:2.2.2-cu121
 ```
 
-The resulting `.sif` is a single file and can be copied between machines.
+The result is a single 10.4 GiB file that can be copied between machines. The tag names
+the PyTorch and CUDA versions the image is built around, since those are what the
+compiled extensions inside it are matched to.
 
-!!! warning "Publication of the public images is in progress"
-    The `ghcr.io/watchmal` registry is not yet populated, so the command above does not
-    resolve at the time of writing. Until it does, the images are available on CC-IN2P3
-    at `/sps/hyperk/containers/ml/` (see
-    [Clusters](../clusters/cc-in2p3-containers.md)), and a local Python environment
-    (route 2) is the alternative elsewhere.
+It provides PyTorch 2.2.2 (CUDA 12.1), PyTorch Geometric 2.5.3 with `torch_scatter` and
+`torch_cluster`, `spconv` 2.3.8, `timm`, `wandb`, `h5py`, `scikit-learn`, `scipy` and
+`matplotlib` — that is, every representation and every model family in one environment.
+
+!!! note "`oras://`, not `docker://`"
+    The image is stored as a native Apptainer `.sif` rather than an OCI image, so it is
+    fetched with the `oras://` transport. `docker://` will not resolve it.
+
+!!! warning "Two packages the analysis layer needs are absent"
+    `analysis/read.py` imports `uproot` and `analysis/regression.py` imports `tabulate`,
+    both at module scope, and neither is in this image. Training and evaluation are
+    unaffected — the run writes plain `.npy` and `.csv` — but reading results back inside
+    this container requires `pip install --user uproot tabulate` once, which persists in
+    your home directory. See
+    [containers](../clusters/cc-in2p3-containers.md#analysis-support).
 
 ### Running the framework inside it
 
@@ -50,7 +62,7 @@ apptainer exec --nv \
   --bind "$PWD":/workspace/ml \
   --bind /path/to/your/data:/workspace/data \
   --pwd /workspace/ml \
-  watchmal.sif \
+  ml_image.sif \
   python main.py --config-name resnet_train -c job
 ```
 

@@ -2,10 +2,12 @@
 
 This page trains and evaluates a graph attention network to separate electrons from muons,
 on a published dataset, entirely on a CPU. It takes under a minute, requires no cluster
-allocation, and needs no files to be edited: a configuration for exactly this dataset is
-shipped with the repository.
+allocation, and needs no files to be edited. 
+A configuration for exactly this dataset is shipped with the repository.
 
-It assumes the framework has been [installed](install.md) by either route.
+It assumes the framework has been [installed](install.md) by either route. 
+_(If you want to run something quicly we recommend to skip the apptainer container
+installation and use Route 2)_
 
 ## 1. Obtain the dataset
 
@@ -22,7 +24,7 @@ data/quickstart/
   splits/pid_e_mu_400.npz          train 280 / validation 60 / test 60
 ```
 
-Each event is a graph: one node per struck photomultiplier tube, with features
+Each event is a graph: one node per hit photomultiplier tube, with features
 (charge, time, *x*, *y*, *z*), and edges to the ten nearest neighbouring tubes. The
 simulated tank has a radius of 32.4 m and a half-height of 33 m.
 
@@ -32,7 +34,7 @@ configuration that lists them the other way round.
 
 ## 2. Run
 
-From the repository root:
+From the repository root (remember to active your python environnement):
 
 ```bash
 python main.py \
@@ -62,7 +64,7 @@ The configuration performs three tasks in sequence: `train`; `restore_best_state
 loads the checkpoint with the lowest validation loss; and `evaluate`, which runs the test
 split.
 
-### What `quickstart` differs in
+<!-- ### What `quickstart` differs in
 
 It is `gat_classification` pointed at the published bundle. Two details are worth reading
 before adapting it to your own data, because both are easy to get wrong and neither fails
@@ -84,7 +86,7 @@ follow from that difference, and they live in
 `data/transforms/quickstart_e_mu_pid.yaml` and the entry config: `charge_index` (charge
 is first here, not second), `feat_norm` (bounds for five features rather than two), and
 the model's `in_channels`. Feeding this bundle through the two-feature transforms raises
-`IndexError: index 2 is out of bounds for dimension 1 with size 2`.
+`IndexError: index 2 is out of bounds for dimension 1 with size 2`. -->
 
 ## 3. What the run writes
 
@@ -108,7 +110,7 @@ outputs/2026-07-31/13-37-06/
 `indices.npy` records which event each row corresponds to. It is required because the
 evaluation order is not the dataset order under distributed execution.
 
-Both `preds` and `softmax` are written on purpose: the raw values retain scale
+Duplicated information (`preds` and `softmax`) are written on purpose: the raw values retain scale
 information that the softmax discards, which matters when debugging a model, while
 `analysis/` keys on `softmax`.
 
@@ -152,10 +154,10 @@ Plots are written to `plots/<run-name>/`.
 
 ## 5. Varying the run without editing anything
 
-Everything below is a command-line change. No file in the repository is modified, and no
-copy of a configuration is made.
+Hydra enables to change the config compose throught CLI, hence without changing any configuration 
+file. 
 
-**Inspect the composed configuration before running it.** This resolves every `_target_`,
+**-c job :iInspect the composed configuration before running it.** This resolves every `_target_`,
 so it also verifies that every class the run would instantiate can be imported:
 
 ```bash
@@ -170,22 +172,68 @@ replaces the entire subtree — here the optimiser:
 ... optimizers@tasks.train.optimizers=adam_lr1e-3
 ```
 
-The `model` group substitutes the same way, but a model must declare the right number of
-input features for the dataset: `model=gcn_classifier` composes cleanly and then fails at
-runtime, because that configuration declares two where this bundle has five.
+The `model` group substitutes the same way.
 
 **Override nested values**, at any depth, using dotted paths:
 
 ```bash
-... tasks.train.epochs=40 tasks.train.optimizers.lr=1e-4 data.dataset.dataset_parameters.batch_size=32
+... tasks.train.epochs=40 tasks.train.optimizers.lr=1e-4 tasks.train.data_loaders.train.batch_size=32
 ```
 
 **Add or remove a key** that the configuration does not already define, with `+` and `~`:
 
 ```bash
-... +tasks.train.num_val_batches=8      # add
-... ~tasks.train.early_stopping         # remove
+... +tasks.train.data_loaders.train.persistent_workers=False   # add
+... '~tasks.train.early_stopping'                              # remove
 ```
+
+!!! warning "What may be added to a task, and what may not"
+    `run.py` removes `data_loaders`, `optimizers`, `scheduler`, `loss` and
+    `early_stopping` from a task's configuration and handles each itself; **everything
+    left over is passed to the engine method as keyword arguments**. A key added directly
+    under `tasks.train` must therefore be a parameter that method accepts — for the graph
+    engine, `epochs`, `val_interval` and `checkpointing`, and nothing else. Adding
+    `+tasks.train.num_val_batches=8` composes without complaint and then fails with a
+    `TypeError` after the data has loaded. Adding *inside* one of the five removed keys,
+    as above, is safe.
+
+### All of it at once
+
+The mechanisms combine in one invocation. This substitutes the optimiser group, overrides
+two nested values, adds a key and removes another:
+
+```bash
+python main.py \
+  --config-path tutorial/config/caverns/main \
+  --config-name quickstart \
+  'hydra.searchpath=[file://tutorial/config/caverns]' \
+  optimizers@tasks.train.optimizers=adam_lr1e-3 \
+  tasks.train.epochs=4 \
+  tasks.train.data_loaders.train.batch_size=32 \
+  +tasks.train.data_loaders.train.persistent_workers=False \
+  '~tasks.train.early_stopping'
+```
+
+| Argument | Mechanism |
+|---|---|
+| `optimizers@tasks.train.optimizers=adam_lr1e-3` | substitutes a config group into a specific position |
+| `tasks.train.epochs=4` | overrides an existing value |
+| `tasks.train.data_loaders.train.batch_size=32` | overrides a nested value |
+| `+...persistent_workers=False` | adds a key the configuration did not define |
+| `'~tasks.train.early_stopping'` | removes a key |
+
+Every run records the configuration it was actually given, so the overrides can be
+confirmed after the fact rather than trusted:
+
+```bash
+grep -E "epochs:|batch_size:|persistent_workers:|lr:" outputs/<date>/<time>/.hydra/config.yaml
+grep -c early_stopping outputs/<date>/<time>/.hydra/config.yaml      # 0
+```
+
+!!! note "Quote the `~`"
+    A bare `~tasks.train.early_stopping` is expanded by the shell as a home directory
+    before Hydra sees it, and the command fails with `no such user or named directory`.
+    Single quotes prevent that, as they do for list values.
 
 **Sweep.** `--multirun` executes the cartesian product of comma-separated values, one run
 per combination, each in its own output directory:
@@ -212,34 +260,15 @@ Full command-line documentation is available from Hydra itself:
 python main.py --hydra-help
 ```
 
-## 6. When to make a workspace instead
-
-Command-line overrides suit exploration and anything scripted. Once a set of values is
-settled — a dataset path used every day, an optimiser configuration worth keeping — it
-belongs in a file rather than in shell history.
-
-```bash
-bash setup/make_dirs.sh
-```
-
-produces `config/` and `launch/`, copies of the shipped trees that are ignored by git, so
-local paths are never committed. Configurations there are used by pointing
-`--config-path` and `hydra.searchpath` at them instead. See
-[Your own workspace](workspace.md).
 
 ## Next
 
+- [Make your own workspace](workspace.md) - how to setup your task of interest using the watchmal framework.
 - [Model zoo](../model-zoo.md) — the other tasks, models and datasets, with the extent to
   which each has been verified.
 - [Clusters](../clusters/index.md) — containers and reference datasets for full-scale
   training.
 
-## Interpreting a two-epoch result
-
-Two epochs on 280 training events is a check that the pipeline runs, not a measurement of
-performance. The expected outcome is that the training loss decreases, that the evaluation
-step writes the files listed above, and that the analysis layer reads them. Separation
-between electrons and muons at this scale is not meaningful.
 
 ## Common failures
 
@@ -258,6 +287,10 @@ between electrons and muons at this scale is not meaningful.
   batch size. Reduce `batch_size`.
 - **A list override has no effect** — the shell split it on the commas. Quote the whole
   argument: `'key=[a,b]'`.
+- **`no such user or named directory`** — an unquoted `~key` was expanded by the shell as
+  a home directory. Quote it: `'~key'`.
+- **`TypeError: train() got an unexpected keyword argument`** — a key was added under
+  `tasks.train` that the engine method does not accept; see the warning in section 5.
 - **Loss becomes `nan` immediately** — usually a feature-order mismatch. Node features are
   ordered `(charge, time, x, y, z)` in this bundle, but other productions use
   `(time, charge, x, y, z)`; a configuration naming the wrong index feeds time to the

@@ -89,10 +89,10 @@ sets whichever package index it needs, so no bundle is combined with another.
 | `requirements-full.txt` | both GPU bundles combined | one environment for every representation |
 
 ```bash
-pip install -r requirements-gpu-graph.txt      # for example
+pip install -r requirements.txt  # example, install a local torch-cpu version 
 ```
 
-Two properties are worth noting, because they explain the shape of the table.
+<!-- Two properties are worth noting, because they explain the shape of the table.
 
 **The GPU bundles pin `torch==2.2.2` and select a matching wheel index.** The pinned
 version is the one the cluster's own training image runs, and `torch_scatter` and
@@ -103,13 +103,12 @@ error on import rather than a failure during installation.
 
 **`requirements-ci.txt` deliberately omits `torch_scatter`, `torch_cluster`, `spconv` and
 `timm`.** None is needed by anything the test suite exercises, `spconv` has no macOS or
-CPU wheel at all, and omitting them keeps a laptop environment installable in one command.
+CPU wheel at all, and omitting them keeps a laptop environment installable in one command. -->
 
 !!! note "The base install is a tested boundary"
-    `requirements.txt` alone is sufficient for the image representation, and this is
-    verified rather than intended: one continuous-integration job installs it and nothing
-    else, and fails if PyTorch Geometric or `wandb` become reachable from an eager import
-    on a shared code path.
+    `requirements.txt` alone is sufficient for the image representation, this 
+    is the recommended install if you want to run quickly some test locally
+    on cpu. (setup -> train -> eval -> analysis)
 
 ## Verifying the installation
 

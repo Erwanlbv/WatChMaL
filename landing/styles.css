@@ -207,6 +207,18 @@ section { padding-inline: clamp(1rem, 4vw, 2.5rem); }
 }
 .split-code .c { color: #5f8199; }
 
+/* PUBLICATIONS */
+.papers { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.9rem; }
+.papers li {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1rem 1.2rem;
+  border-left: 3px solid var(--accent);
+}
+.papers a { font-weight: 600; }
+.papers .paper-meta,
+.papers .paper-note { display: block; font-size: 0.86rem; color: var(--muted); margin-top: 0.3rem; }
+.papers .paper-note { color: color-mix(in srgb, var(--muted) 80%, var(--text)); }
+
 /* CITE */
 .band.cite { max-width: 780px; }
 .band.cite blockquote {

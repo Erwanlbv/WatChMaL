@@ -132,8 +132,8 @@
   <section class="band evd-band">
     <h2>What the detector sees</h2>
     <p class="band-sub">
-      Simulated single-particle events, rendered from the same graph datasets the models
-      train on. Each point is a struck photomultiplier tube, coloured by collected charge;
+      Simulated neutrino events, rendered from the same datasets the models
+      train on. Each point is a hit photomultiplier tube, coloured by collected charge;
       the Cherenkov cone intersects the tank wall as a ring. The electron ring is diffuse
       because the shower scatters, the muon ring sharp because the track is straight —
       that difference is what a particle-identification network learns.
@@ -169,14 +169,16 @@
            is a YAML line, not a patch.</p>
       </article>
       <article class="card">
-        <h3>Optional stays optional</h3>
-        <p>The base install runs the image family with no PyTorch Geometric and no
-           <code>wandb</code>. CI proves that boundary on every commit.</p>
+        <h3>From a laptop to a cluster</h3>
+        <p>The same configuration runs on one CPU or many GPUs. Distributed training is a
+           shared layer — rank-aware sampling, gradient reduction and per-rank logs — so
+           scaling up is a config change, not a rewrite.</p>
       </article>
       <article class="card">
-        <h3>Reproducible runs</h3>
-        <p>One top-level seed threads through samplers and distributed training; a
-           deterministic mode makes two runs bit-identical.</p>
+        <h3>Results you can analyse</h3>
+        <p>Every run writes the same arrays and metric logs, and the bundled analysis layer
+           reads them: training curves, ROC curves, residuals and event displays, without
+           re-running the model.</p>
       </article>
     </div>
   </section>
@@ -190,9 +192,10 @@
         <p>Install, build a small dataset and train a model end to end on a laptop CPU.</p>
       </a>
       <a class="card card-link" href="docs/model-zoo/">
-        <h3>Find a model →</h3>
-        <p>Every task, model and dataset combination, the config that runs it, and how far
-           it has actually been verified.</p>
+        <h3>Find your model →</h3>
+        <p>Cherry-pick a model already configured for your task, or read across the zoo for
+           a design worth adapting. Each entry names the config that runs it and how far it
+           has been verified.</p>
       </a>
       <a class="card card-link" href="docs/clusters/">
         <h3>Run at scale →</h3>
@@ -229,6 +232,46 @@ python main.py \
 <span class="c"># print the fully composed config and exit</span>
 python main.py --config-name resnet_train -c job</pre>
     </div>
+  </section>
+
+  <section class="band alt">
+    <h2>Selected publications</h2>
+    <p class="band-sub">
+      Machine-learning reconstruction for water Cherenkov detectors. The two most recent
+      name this framework directly.
+    </p>
+    <ul class="papers">
+      <li>
+        <a href="https://arxiv.org/abs/2604.13503">Enhancing Event Reconstruction in
+        Hyper-Kamiokande with Machine Learning: A ResNet Implementation</a>
+        <span class="paper-meta">Atta, Prouse, Chen, Okumura, de Perio, Thrane, Urquijo ·
+        arXiv:2604.13503 · 2026</span>
+        <span class="paper-note">ResNet classification and vertex, direction and momentum
+        regression, reported at 3.2–5.2 × 10<sup>4</sup> times the speed of
+        likelihood-based reconstruction. Uses WatChMaL.</span>
+      </li>
+      <li>
+        <a href="https://arxiv.org/abs/2411.09562">Likelihood and Deep Learning Analysis of
+        the electron neutrino event sample at the Intermediate Water Cherenkov Detector
+        (IWCD) of the Hyper-Kamiokande experiment</a>
+        <span class="paper-meta">Mondal, Prouse, de Perio, Hartz, Bose, for the
+        Hyper-Kamiokande Collaboration · arXiv:2411.09562 · 2024</span>
+        <span class="paper-note">Event selection with a ResNet-18 “within the WatChMaL
+        framework”, for both IWCD and the far detector.</span>
+      </li>
+      <li>
+        <a href="https://doi.org/10.3390/psf2023008063">Machine Learning Techniques to
+        Enhance Event Reconstruction in Water Cherenkov Detectors</a>
+        <span class="paper-meta">Prouse, de Perio, Fedorko ·
+        Physical Sciences Forum <strong>8</strong>, 63 · 2023 · doi:10.3390/psf2023008063</span>
+      </li>
+      <li>
+        <a href="https://doi.org/10.3389/fdata.2022.868333">Maximum likelihood reconstruction of
+        water Cherenkov events with deep generative neural networks</a>
+        <span class="paper-meta">Jia, Kumar, Mackey, Putra, Vilela, Wilking, Xia,
+        Yanagisawa, Yang · Frontiers in Big Data <strong>5</strong>, 868333 · 2022 · arXiv:2202.01276</span>
+      </li>
+    </ul>
   </section>
 
   <section class="band cite">

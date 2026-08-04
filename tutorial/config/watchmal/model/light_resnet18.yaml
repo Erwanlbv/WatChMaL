@@ -1,0 +1,18 @@
+# CI-sized stand-in for resnet18.
+#
+# Same architecture as watchmal.model.resnet.resnet18 - identical residual blocks, padding
+# mode and normalisation - only narrower: stage widths are base_width x (1, 2, 4, 8)
+# instead of the fixed (64, 128, 256, 512). At base_width: 64 it is bit-identical to
+# resnet18. See watchmal/model/light_resnet.py.
+#
+# base_width 6 gives ~99k parameters against resnet18's 11.2M, which is ~13x faster on a
+# 2x274x144 event display. That is what makes an end-to-end run affordable on a
+# GitHub-hosted runner, where the point is to prove the pipeline executes rather than to
+# fit anything.
+#
+# Override num_input_channels / num_output_channels to match your dataset and task.
+_target_: watchmal.model.light_resnet.light_resnet18
+base_width: 6
+num_input_channels: 41
+num_output_channels: 2
+conv_pad_mode: circular

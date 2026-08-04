@@ -1,0 +1,97 @@
+# TIER 3 - END-TO-END RUNS ON COMMITTED DATA
+#
+# Goal: does `python main.py ...` actually work? Tiers 0/1 prove the repo parses, imports
+#   and composes; Tier 2 proves the merge seams compute the right numbers. None of them
+#   ever starts a run - Tier 2's two smoke tests need cluster-sized data and SKIP here, so
+#   until this workflow existed GitHub had never once executed main.py.
+# Covers: the full chain train -> validate -> _BEST -> restore -> evaluate -> outputs/, for
+#   BOTH image dataset classes (CNNmPMTDataset on the mPMT toy, CNNDataset on HK FD) and
+#   for the graph/GAT family over a concatenated dataset; the checkpoint round-trip and the
+#   two checkpoint formats; that no test event is lost or mislabelled; and the loader edge
+#   branches that only fire on small splits. Not covered: multi-ring/spconv (T3.4, omitted
+#   by request), nccl/multi-GPU, wandb network, any accuracy claim.
+# Data: committed, ~5.1 MB under tests/data/ (setup/make_ci_fixtures.py regenerates and
+#   `--check`s it). So the checkout IS the data step - no download, no cache, no network
+#   dependency, and the graph fixture is built from the same h5 rather than shipped.
+# Local: pytest tests/tier3
+#        python setup/make_ci_fixtures.py --check   # fixtures still match their source
+
+name: Tier 3 - end-to-end runs (CNN + graph)
+
+on:
+  # PRs only, matching tiers 0-2: adding `push` makes every push to a PR branch run each
+  # workflow twice (push builds the branch head, pull_request builds the merge commit).
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tier3-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: end-to-end (CPU, committed data)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # The CPU index matters: the default one pulls ~2.5 GB of CUDA wheels, which is slow
+      # and can hit the runner disk limit. Nothing here needs a GPU.
+      - name: Install torch (CPU wheels)
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      # torch_geometric is required: the graph tests run the GAT family end to end. No
+      # COMPILED PyG extension is needed, and that is deliberate - torch_geometric.nn
+      # .knn_graph wants pyg-lib or torch_cluster, wheels that are version-fragile and not
+      # in the base requirements, so the graph fixture builds its knn with torch.cdist.
+      - name: Install framework requirements
+        run: pip install -r requirements.txt -r requirements-graph.txt pytest
+
+      - name: Record the installed dependency set
+        run: pip list
+
+      # Cheap, and it fails for a clear reason rather than letting every downstream test
+      # die on a missing file: the fixtures are committed, so this only catches a bad
+      # merge or an LFS-style truncation.
+      - name: Committed fixtures are present and well-formed
+        run: |
+          python - <<'PY'
+          import sys, h5py, numpy as np
+          from pathlib import Path
+          ok = True
+          for name, n_expected in (("toy_mpmt_ci.h5", 400), ("hkfd_ci.h5", 100)):
+              p = Path("tests/data") / name
+              if not p.is_file():
+                  print(f"MISSING {p}"); ok = False; continue
+              with h5py.File(p) as f:
+                  n = f["event_hits_index"].shape[0]
+                  hits = np.diff(np.append(f["event_hits_index"][:], f["hit_pmt"].shape[0]))
+                  print(f"{name}: {n} events, {hits.sum():,d} hits, "
+                        f"min {hits.min()}, {p.stat().st_size/1e6:.2f} MB")
+                  if n != n_expected:
+                      print(f"  expected {n_expected} events"); ok = False
+                  if hits.min() <= 0:
+                      print("  contains a zero-hit event - no image dataset can build one")
+                      ok = False
+          sys.exit(0 if ok else 1)
+          PY
+
+      - name: End-to-end runs
+        run: pytest tests/tier3 -v --durations=10
+        env:
+          PYTHONPATH: .
+
+      # Informational: the checks that only exist until a unification step lands, i.e. the
+      # live remaining-work list. Never fails the job.
+      - name: Remaining unification work (transitional checks)
+        if: always()
+        run: pytest tests/tier3 -m transitional --collect-only -q || true
+        env:
+          PYTHONPATH: .

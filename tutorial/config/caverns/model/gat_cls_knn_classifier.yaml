@@ -1,0 +1,33 @@
+# Graph attention network whose edges are built in its own forward pass.
+#
+# Pair with data/dataset/hk_h5_graph_classification.yaml, which supplies data.pos and no
+# edge_index. Changing knn_k changes the graph without touching the data.
+_target_: watchmal.model.gat.GraphAttentionNetwork
+
+hidden_channels: 128
+num_heads: 4
+num_layers: 4
+
+# Node feature columns supplied by the dataset: charge and time.
+in_channels: 2
+out_channels: 2
+
+num_cls_tokens: 1
+mlp_expansion_factor: 4
+activation: relu
+node_encoder_input_norm: False
+
+# Neighbours per hit. The search runs on the device the batch occupies, through
+# torch_cluster where it is installed and a chunked torch.cdist fallback otherwise.
+knn_k: 8
+knn_loop: False
+knn_undirected: True
+
+# Hit coordinates are also given to the node encoder, appended to the feature columns
+# above, so the encoder sees 5 channels. Without them the coordinates would reach the
+# network only through the graph topology, which is enough for energy and particle
+# identification but not for vertex or direction regression.
+position_dim: 3
+
+use_nhits: True
+use_event_total_charge: True

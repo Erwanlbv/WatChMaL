@@ -27,6 +27,13 @@ PID_MUON = "mu-_200_qtxyz_pid_knn10"
 VERTEX = "mu-_200_train_tqxyz_edges_xyz_label_vertex_knn5"
 
 
+# The run-time graph path reads a flat WatChMaL HDF5 file and a geometry file rather than
+# a stored PyG dataset. Both live outside the repo for the same reason: 1985 events are
+# 20 MB of hits, and the geometry is detector-specific.
+DEFAULT_H5_PID = Path("/Users/erwan/work/mc_prods/hk/hkfd_emu_rwcs_2k_watchmal.h5")
+DEFAULT_GEOMETRY = Path("/Users/erwan/work/geom/hyperk_20inch_pmts.npz")
+
+
 def smoke_data_root() -> Path:
     return Path(os.environ.get("WATCHMAL_SMOKE_DATA", DEFAULT_SMOKE_DATA))
 
@@ -77,3 +84,21 @@ def make_split(tmp_path):
         return path
 
     return _make
+
+
+@pytest.fixture(scope="session")
+def h5_pid_file() -> Path:
+    """A flat WatChMaL HDF5 file holding e- and mu- events."""
+    path = Path(os.environ.get("WATCHMAL_H5_PID", DEFAULT_H5_PID))
+    if not path.is_file():
+        pytest.skip(f"HDF5 PID file not available at {path}; set WATCHMAL_H5_PID.")
+    return path
+
+
+@pytest.fixture(scope="session")
+def hk_geometry() -> Path:
+    """Geometry providing the hit coordinates for the file above."""
+    path = Path(os.environ.get("WATCHMAL_GEOMETRY", DEFAULT_GEOMETRY))
+    if not path.is_file():
+        pytest.skip(f"Geometry file not available at {path}; set WATCHMAL_GEOMETRY.")
+    return path

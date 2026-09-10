@@ -348,3 +348,104 @@ def test_model_overfits_a_small_sample(pid_datasets, num_cls_tokens):
         f"from its input"
     )
     assert accuracy == 1.0, f"accuracy {accuracy:.3f} on the memorised sample"
+
+
+# --------------------------------------------------------------------------- #
+# Graphs assembled at load time, edges built in the forward pass
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.graph
+def test_h5_graph_run_with_forward_pass_knn(tmp_path, h5_pid_file, hk_geometry, make_split):
+    """The route that stores no graph at all.
+
+    Everything above reads a PyG dataset whose edges were computed offline. Here the
+    HDF5 file is the stored format, one Data is assembled per event as it is requested,
+    and the k-nearest-neighbour graph is built inside the model's forward pass from
+    data.pos. Three things can only fail on this route: the dataset factory has to accept
+    dataset parameters that name no folder of stored tensors, the transforms have to run
+    on an object the dataset just built rather than one sliced out of a collated file,
+    and the model has to find coordinates where it expects them.
+    """
+    split = make_split(n_events=1985, n_train=60, n_val=20, n_test=20)
+
+    tree = _config_tree(tmp_path, {
+        "data/dataset/hk_h5_graph_classification.yaml": {
+            "split_path": str(split),
+            "dataset_parameters.h5_path": str(h5_pid_file),
+            "dataset_parameters.geometry_file": str(hk_geometry),
+        },
+        "model/gat_cls_knn_classifier.yaml": {
+            "hidden_channels": 32, "num_layers": 2, "knn_k": 6,
+        },
+    })
+
+    run_dir = tmp_path / "run"
+    _run(tree, "gat_cls_knn_h5_classification", run_dir, seed=4242)
+    _assert_run_is_analysis_readable(run_dir)
+    _assert_test_set_is_complete(run_dir, split)
+
+    preds = np.load(run_dir / "outputs" / "preds.npy")
+    targets = np.load(run_dir / "outputs" / "targets.npy")
+    assert preds.shape[1] == 2, f"expected 2 class scores per event, got {preds.shape}"
+    assert np.all(np.isfinite(preds)), (
+        "non-finite predictions: the usual cause is a zero-charge hit reaching the "
+        "logarithm in the Normalize transform, which the Threshold transform clamps"
+    )
+    assert len(np.unique(targets)) == 2, "the test split should contain both classes"
+
+
+@pytest.mark.graph
+def test_geometry_lookup_places_hits_correctly(h5_pid_file, hk_geometry):
+    """Hit coordinates come from a geometry file keyed by PMT identifier, and the
+    identifiers are not the row numbers.
+
+    In hyperk_20inch_pmts.npz the tube_id column runs 19746, 19745, 19744, ..., so
+    indexing position[] with a PMT identifier returns a valid point on the detector that
+    belongs to a different PMT. Nothing raises, the hits still lie on the tank wall, and
+    the summary statistics of the hit pattern barely move — the mean distance to the five
+    nearest hits changes by under 1 %. What does move is the physics: a Cherenkov cone
+    lights a region downstream of the interaction vertex along the particle's direction,
+    so the charge-weighted centroid of the hits should lie near that direction, and under
+    a scrambled assignment it does not.
+    """
+    import h5py
+    from watchmal.dataset.graph.h5_graph_dataset import H5GraphDataset
+
+    with h5py.File(h5_pid_file, "r") as h5:
+        vertices = h5["positions"][:].squeeze(1)
+        directions = np.stack(
+            [h5[f"particle_dir_{axis}"][:] for axis in ("x", "y", "z")], axis=1
+        )
+
+    dataset = H5GraphDataset(str(h5_pid_file), str(hk_geometry))
+
+    def median_opening_angle(source) -> float:
+        angles = []
+        for event in range(60):
+            graph = source[event]
+            charge = graph.x[:, 0].numpy()
+            if charge.sum() <= 0:
+                continue
+            centroid = (graph.pos.numpy() * charge[:, None]).sum(0) / charge.sum()
+            offset = centroid - vertices[event]
+            offset = offset / (np.linalg.norm(offset) + 1e-9)
+            direction = directions[event] / (np.linalg.norm(directions[event]) + 1e-9)
+            angles.append(np.degrees(np.arccos(np.clip(offset @ direction, -1.0, 1.0))))
+        return float(np.median(angles))
+
+    with_lookup = median_opening_angle(dataset)
+
+    scrambled = H5GraphDataset(str(h5_pid_file), str(hk_geometry))
+    scrambled.pmt_to_geometry_row = None
+    without_lookup = median_opening_angle(scrambled)
+
+    assert with_lookup < 45.0, (
+        f"median angle between the charge centroid and the true direction is "
+        f"{with_lookup:.1f} deg; the hits are not where the geometry says they are"
+    )
+    assert without_lookup > 70.0, (
+        f"indexing the geometry directly gave {without_lookup:.1f} deg, which is not the "
+        f"random value this test expects. Either the geometry file is now ordered by "
+        f"identifier, in which case the lookup table is redundant, or this check no "
+        f"longer measures what it claims"
+    )

@@ -1,0 +1,46 @@
+# Transforms for the run-time HDF5 graph datasets with node features [charge, time].
+#
+# The column order differs from data/transforms/20inch_pmt_classification.yaml, which
+# describes stored datasets whose first column is time. Feature order is not portable
+# between datasets, and a wrong charge_index feeds time to the network as charge.
+
+transforms:
+
+  # Charge is clamped away from zero before the logarithm below: a zero-charge hit would
+  # otherwise produce -inf and turn the loss into NaN a few steps later, where it is
+  # reported as an unrelated failure at the end of the run.
+  Threshold:
+    _target_: watchmal.dataset.graph.pyg_transformations.Threshold
+    key: 'x'
+    min_thresholds: [0.01, null]
+    max_thresholds: [null, null]
+
+  AddFeaturesInData:
+    _target_: watchmal.dataset.graph.pyg_transformations.AddFeaturesInData
+    charge_index: 0
+    feature_names:
+      - 'n_hits'
+      - 'event_total_charge'
+    max_vals: [6000., 12000.]
+    min_vals: [120., 140.]
+
+  Normalize:
+    _target_: watchmal.dataset.graph.pyg_transformations.Normalize
+    eps: !!float 1e-10
+    # Charge spans several decades and is taken logarithmically; time does not.
+    apply_log: [True, False]
+    feat_norm:
+      - [1000, 1900]    # maxima: charge in photoelectrons, time in nanoseconds
+      - [0.01, 550]     # minima
+
+  MapLabels:
+    _target_: watchmal.dataset.graph.pyg_transformations.MapLabels
+    # Particle codes in the HDF5 'labels' array, mapped to 0, 1, ... in this order.
+    label_set:
+      - 13  # mu-
+      - 11  # e-
+
+  ConvertAndToDict:
+    _target_: watchmal.dataset.graph.pyg_transformations.ConvertAndToDict
+    feature_to_type: float32
+    target_to_type: int64

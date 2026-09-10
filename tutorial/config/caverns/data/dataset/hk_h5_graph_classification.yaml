@@ -1,0 +1,41 @@
+# Graph classification from an HDF5 file, with the graph built at run time.
+#
+# The events are read from the same flat HDF5 layout the image datasets use, and one PyG
+# Data is assembled per event when the event is requested. No edges are stored or built
+# here: the object carries node features in x and hit coordinates in pos, and the model
+# builds the k-nearest-neighbour graph in its forward pass. Set knn_k on the model
+# (model/gat_cls_knn_classifier.yaml) to choose the number of neighbours.
+#
+# 'kind' does not contain 'in_memory', so the dataset is built inside the engine rather
+# than once in main.py; there is no large collated file to share between workers.
+
+kind: "pyg_h5_graph"
+
+# Path to the .npz holding the split indices, with keys train_idxs / val_idxs / test_idxs.
+split_path: /path/to/your/index_list.npz
+
+# Mandatory, and its length must equal the model's out_channels.
+target_names: ['mu-', 'e-']
+
+# Used for the evaluation plots.
+signal_key: 'e-'
+
+dataset_parameters:
+  _target_: watchmal.dataset.graph.h5_graph_dataset.H5GraphDataset
+
+  h5_path: /path/to/your/events.h5
+
+  # Geometry providing the hit coordinates, looked up by PMT identifier. Must match the
+  # detector the HDF5 file was produced for.
+  geometry_file: /path/to/your/geometry.npz
+
+  # Value added to a PMT identifier from the HDF5 file to obtain the geometry's tube_id.
+  # 1 for a 0-based HDF5 file against a 1-based geometry, which is the Hyper-K case.
+  geometry_tube_id_offset: 1
+
+  # Node feature columns, in order. Their number must equal the model's in_channels.
+  # The coordinates are always available in data.pos regardless of this list.
+  feature_keys: ['charge', 'time']
+
+  # HDF5 array read into data.y, unmapped; MapLabels turns the codes into class indices.
+  target_key: 'labels'

@@ -484,8 +484,12 @@ class ReconstructionEngine(BaseEngine):
 
             if self.rank == 0:
 
+                # Keyword, not positional: make_plots is defined as
+                # (self, preds, targets, prefix_plot_name) in both concrete engines, so
+                # passing prefix_plot_name first bound it to `preds` and the explicit
+                # preds= then raised TypeError.
                 self.make_plots(
-                    prefix_plot_name,
+                    prefix_plot_name=prefix_plot_name,
                     targets=to_disk_epoch_history["targets"],
                     preds=to_disk_epoch_history["preds"],
                 )

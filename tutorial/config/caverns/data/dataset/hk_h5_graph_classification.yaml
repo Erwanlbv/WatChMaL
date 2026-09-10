@@ -1,0 +1,52 @@
+# Graph classification from an HDF5 file, with the graph built at run time.
+#
+# The events are read from the same flat HDF5 layout the image datasets use, and one PyG
+# Data is assembled per event when the event is requested. No edges are stored or built
+# here: the object carries node features in x and hit coordinates in pos, and the model
+# builds the k-nearest-neighbour graph in its forward pass. Set knn_k on the model
+# (model/gat_cls_knn_classifier.yaml) to choose the number of neighbours.
+#
+# 'kind' does not contain 'in_memory', so the dataset is built inside the engine rather
+# than once in main.py; there is no large collated file to share between workers.
+
+kind: "pyg_h5_graph"
+
+# Path to the .npz holding the split indices, with keys train_idxs / val_idxs / test_idxs.
+split_path: /path/to/your/index_list.npz
+
+# Mandatory, and its length must equal the model's out_channels.
+target_names: ['mu-', 'e-']
+
+# Used for the evaluation plots.
+signal_key: 'e-'
+
+dataset_parameters:
+  _target_: watchmal.dataset.graph.h5_graph_dataset.H5GraphDataset
+
+  h5_path: /path/to/your/events.h5
+
+  # Geometry providing the hit coordinates, looked up by PMT identifier. Must match the
+  # detector the HDF5 file was produced for.
+  geometry_file: /path/to/your/geometry.npz
+
+  # How the geometry file is indexed. 'auto' honours its identifier column (tube_id or
+  # tube_no) when it has one, which is required for hyperk_20inch_pmts.npz and a no-op
+  # for the Super-K and WCTE files, whose rows are already in identifier order. 'row'
+  # uses the identifier as a row number, which is what the image and point-cloud datasets
+  # still do; it is the setting to reproduce a run made that way.
+  geometry_index_by: auto
+  # Value added to a 0-based identifier from the HDF5 file to reach the geometry's own.
+  # 'auto' reads it from the smallest identifier in the file.
+  geometry_id_offset: auto
+
+  # Node feature columns, in order. Their number must equal the model's in_channels.
+  # Available: charge, time, x, y, z, dir_x, dir_y, dir_z, r, theta, cos_theta, sin_theta.
+  # The Cartesian coordinates are always in data.pos regardless of this list, since that
+  # is what the model's neighbour search reads.
+  # The coordinates are listed here, not injected by the model's position_dim, so that
+  # they pass through Normalize with everything else. data.pos stays in detector units
+  # regardless, which is what the neighbour search needs.
+  feature_keys: ['charge', 'time', 'x', 'y', 'z']
+
+  # HDF5 array read into data.y, unmapped; MapLabels turns the codes into class indices.
+  target_key: 'labels'

@@ -84,7 +84,9 @@ class Normalize(torch.nn.Module):
 
             for ft_index in range(data.x.size(dim=1)):
                 if self.apply_log[ft_index]:
-                    data.x[:, ft_index] = (data.x[:, ft_index].log() - self.feat_norm[1, ft_index].log()) / (self.feat_norm[0, ft_index].log() - self.feat_norm[1, ft_index].log() + self.eps)
+                    # log1p to deal with values equal to 0 (e.g. charge when no cut is
+                    # applied). The bounds are transformed the same way.
+                    data.x[:, ft_index] = (torch.log1p(data.x[:, ft_index]) - torch.log1p(self.feat_norm[1, ft_index])) / (torch.log1p(self.feat_norm[0, ft_index]) - torch.log1p(self.feat_norm[1, ft_index]) + self.eps)
                 else :
                     data.x[:, ft_index] = (data.x[:, ft_index] - self.feat_norm[1, ft_index]) / (self.feat_norm[0, ft_index] - self.feat_norm[1, ft_index] + self.eps)
 
@@ -93,7 +95,8 @@ class Normalize(torch.nn.Module):
             
             # Erwan - To do : add support for multi dim target with log norm
             if self.target_apply_log[0]:
-                data.y = (data.y.log() - self.target_norm[1].log()) / (self.target_norm[0].log() - self.target_norm[1].log() + self.eps)
+                # log1p, as for the features above.
+                data.y = (torch.log1p(data.y) - torch.log1p(self.target_norm[1])) / (torch.log1p(self.target_norm[0]) - torch.log1p(self.target_norm[1]) + self.eps)
             else :
                 data.y = (data.y - self.target_norm[1]) / (self.target_norm[0] - self.target_norm[1] + self.eps)
 

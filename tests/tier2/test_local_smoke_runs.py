@@ -207,3 +207,144 @@ def test_vertex_regression_run_is_complete(tmp_path, vertex_dataset, make_split)
     assert targets.shape[1] == 3, f"vertex targets are (x, y, z), got {targets.shape}"
     assert preds.shape == targets.shape
     assert np.all(np.isfinite(preds)), "non-finite predictions"
+
+
+# --------------------------------------------------------------------------- #
+# CLS-token readout
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.graph
+def test_cls_readout_run_is_complete(tmp_path, pid_datasets, make_split):
+    """The same PID route through the classification-token readout.
+
+    The mean-pool run above already covers the engine, the tracker and the output
+    layout. What is exercised here is the readout that mean pooling does not reach: the
+    virtual CLS nodes are appended inside the forward pass, so the batch the attention
+    layers see is not the batch the data loader produced. The failure this catches is a
+    CLS block that is laid out or sliced in the wrong order, which yields a well-formed
+    run whose predictions belong to the wrong events.
+    """
+    electron, muon = pid_datasets
+    split = make_split(n_events=400, n_train=60, n_val=20, n_test=20)
+
+    tree = _config_tree(tmp_path, {
+        "data/dataset/20inch_pmt_knn5_classification.yaml": {
+            "split_path": str(split),
+            "dataset_parameters.graph_folder_path": [str(electron), str(muon)],
+        },
+        # These files are q,t,x,y,z: charge is column 0, and the shipped feat_norm
+        # carries 2 entries for a 5-feature dataset.
+        "data/transforms/20inch_pmt_classification.yaml": {
+            "transforms.AddFeaturesInData.charge_index": 0,
+            "transforms.Normalize.feat_norm": [
+                [1000, 1900, 3242.96, 3242.96, 3296.47],
+                [0.01, 550, -3242.96, -3242.96, -3296.47],
+            ],
+        },
+        "model/gat_cls_classifier.yaml": {"in_channels": 5, "hidden_channels": 32,
+                                          "num_layers": 2},
+    })
+
+    run_dir = tmp_path / "run"
+    _run(tree, "gat_cls_classification", run_dir, seed=4242)
+    _assert_run_is_analysis_readable(run_dir)
+    _assert_test_set_is_complete(run_dir, split)
+
+    preds = np.load(run_dir / "outputs" / "preds.npy")
+    targets = np.load(run_dir / "outputs" / "targets.npy")
+    assert preds.shape[1] == 2, f"expected 2 class scores per event, got {preds.shape}"
+    assert np.all(np.isfinite(preds)), "non-finite predictions"
+    assert len(np.unique(targets)) == 2, "the test split should contain both classes"
+
+
+# --------------------------------------------------------------------------- #
+# Learning
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.graph
+@pytest.mark.parametrize("num_cls_tokens", [0, 1])
+def test_model_overfits_a_small_sample(pid_datasets, num_cls_tokens):
+    """The model can drive the training loss to zero on a sample it can memorise.
+
+    Every other test in this file asserts that the pipeline runs and writes well-formed
+    files. None of them would fail if the model were incapable of learning: a network
+    whose input has been destroyed upstream still produces finite logits, a finite loss
+    and a complete set of output arrays. Overfitting a handful of events is the cheapest
+    property that separates a model that learns from one that only executes, and it is
+    checked for both readouts because they share no code after the attention stack.
+
+    Run directly on the model rather than through main.py: the engine is covered above,
+    and 200 optimisation steps in-process cost seconds where 200 epochs of a subprocess
+    run would cost minutes.
+    """
+    import torch
+    from torch_geometric.data import Batch
+    from watchmal.dataset.graph.pyg_in_memory_20inch_pmt import PyGInMemory20inchDataset
+    from watchmal.model.gat import GraphAttentionNetwork
+
+    torch.manual_seed(0)
+    n_per_class = 4
+    max_hits = 256          # see the note on cost below
+    n_steps = 150
+
+    graphs, labels = [], []
+    for class_index, folder in enumerate(pid_datasets):
+        dataset = PyGInMemory20inchDataset(
+            pyg_data_folder_path=str(folder),
+            pyg_data_file_names=["data.pt"],
+            transforms=None,
+        )
+        for event in range(n_per_class):
+            graph = dataset[event]
+            # These events carry 137 to 7319 hits. Cost is linear in the edge count, and
+            # the stored graphs are k=10 nearest-neighbour graphs, so a full event is
+            # ~73 000 edges and 150 steps over eight of them is minutes of CPU. The
+            # property under test — that the loss reaches zero on a memorisable sample —
+            # does not depend on event size, so the graph is truncated to its first
+            # max_hits nodes and the edges among them.
+            keep = min(max_hits, graph.num_nodes)
+            edge_index = graph.edge_index
+            inside = (edge_index[0] < keep) & (edge_index[1] < keep)
+            graph.edge_index = edge_index[:, inside]
+            graph.x = graph.x[:keep]
+            if getattr(graph, "pos", None) is not None:
+                graph.pos = graph.pos[:keep]
+            graph.num_nodes = keep
+            graphs.append(graph)
+            labels.append(class_index)
+
+    batch = Batch.from_data_list(graphs)
+    target = torch.tensor(labels, dtype=torch.long)
+
+    # The shipped node features are q, t, x, y, z in detector units: charge in
+    # photoelectrons, time in nanoseconds, coordinates in centimetres. Standardising
+    # them per column is what the Normalize transform does in a real run; without it the
+    # coordinate columns dominate the first linear layer by three orders of magnitude.
+    features = batch.x
+    batch.x = (features - features.mean(0)) / (features.std(0) + 1e-8)
+
+    model = GraphAttentionNetwork(
+        in_channels=5, hidden_channels=32, out_channels=2,
+        num_layers=2, num_heads=4, num_cls_tokens=num_cls_tokens,
+    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    criterion = torch.nn.CrossEntropyLoss()
+
+    first_loss, last_loss, accuracy = None, None, 0.0
+    for step in range(n_steps):
+        optimizer.zero_grad()
+        output = model(batch)
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step()
+        if first_loss is None:
+            first_loss = loss.item()
+        last_loss = loss.item()
+        accuracy = (output.argmax(-1) == target).float().mean().item()
+
+    assert last_loss < 0.05, (
+        f"training loss stalled at {last_loss:.4f} after {n_steps} steps on "
+        f"{len(graphs)} events (started at {first_loss:.4f}); the model is not learning "
+        f"from its input"
+    )
+    assert accuracy == 1.0, f"accuracy {accuracy:.3f} on the memorised sample"

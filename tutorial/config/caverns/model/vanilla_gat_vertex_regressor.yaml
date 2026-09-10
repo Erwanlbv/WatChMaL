@@ -1,3 +1,6 @@
+# Graph attention network for vertex regression, mean-pooling readout.
+#
+# out_channels is 3 for the (x, y, z) components of the interaction vertex.
 _target_: watchmal.model.gat.GraphAttentionNetwork
 
 hidden_channels: 20
@@ -6,6 +9,7 @@ num_layers: 3
 in_channels: 5
 out_channels: 3
 
+num_cls_tokens: 0
+
 use_nhits: True
 use_event_total_charge: True
-attention_type: 'vanilla'  # Options: 'vanilla' or 'concat_and_wo_mlp'

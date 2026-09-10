@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 DEFAULT_SMOKE_DATA = Path(
-    "/Users/erwan/work/mc_prods/tutorial-dataset-watchmal/graph_datasets/smoke"
+    "/Users/erwan/work/mc_prods/wat-repo-test-datasets/graph_datasets/smoke"
 )
 
 # Sub-directory names, and what each is for. The energy dataset is deliberately unused:

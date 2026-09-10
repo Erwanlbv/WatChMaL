@@ -43,7 +43,10 @@ dataset_parameters:
   # Available: charge, time, x, y, z, dir_x, dir_y, dir_z, r, theta, cos_theta, sin_theta.
   # The Cartesian coordinates are always in data.pos regardless of this list, since that
   # is what the model's neighbour search reads.
-  feature_keys: ['charge', 'time']
+  # The coordinates are listed here, not injected by the model's position_dim, so that
+  # they pass through Normalize with everything else. data.pos stays in detector units
+  # regardless, which is what the neighbour search needs.
+  feature_keys: ['charge', 'time', 'x', 'y', 'z']
 
   # HDF5 array read into data.y, unmapped; MapLabels turns the codes into class indices.
   target_key: 'labels'

@@ -8,8 +8,8 @@ hidden_channels: 128
 num_heads: 4
 num_layers: 4
 
-# Node feature columns supplied by the dataset: charge and time.
-in_channels: 2
+# Node feature columns supplied by the dataset: charge, time and the three coordinates.
+in_channels: 5
 out_channels: 2
 
 num_cls_tokens: 1
@@ -23,11 +23,12 @@ knn_k: 8
 knn_loop: False
 knn_undirected: True
 
-# Hit coordinates are also given to the node encoder, appended to the feature columns
-# above, so the encoder sees 5 channels. Without them the coordinates would reach the
-# network only through the graph topology, which is enough for energy and particle
-# identification but not for vertex or direction regression.
-position_dim: 3
+# 0, not 3: the coordinates already reach the encoder as feature columns, where the
+# Normalize transform scales them. Appending data.pos here instead would feed the encoder
+# raw centimetres alongside features scaled to [0, 1] — measured on one event, the signal
+# then carries 0.00 % of the input variance (charge 1.0e-02 and time 1.3e-02 against
+# 3.0e+06, 3.2e+06 and 4.6e+06 for x, y and z) and the model cannot learn.
+position_dim: 0
 
 use_nhits: True
 use_event_total_charge: True

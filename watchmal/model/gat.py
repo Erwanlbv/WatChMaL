@@ -140,7 +140,13 @@ class GraphAttentionNetwork(nn.Module):
         Number of leading columns of ``data.pos`` concatenated onto ``data.x`` before the
         node encoder. ``0`` leaves the features untouched, which is correct when the
         coordinates are already columns of ``data.x`` or when the task does not need
-        them. Energy and PID can be learned from the graph topology alone; vertex and
+        them. **Setting it above 0 appends ``data.pos`` unscaled.** No transform in this
+        package normalises ``pos``, since the neighbour search needs it in detector units,
+        so the encoder would receive centimetres beside features scaled to [0, 1]: on one
+        Hyper-K event the charge and time columns then carry 0.00 % of the input variance
+        (1.0e-02 and 1.3e-02 against 3.0e+06, 3.2e+06 and 4.6e+06), and the model does not
+        learn. Prefer listing the coordinates among the dataset's feature columns, where
+        they are scaled with everything else. Energy and PID can be learned from the graph topology alone; vertex and
         direction regression cannot, since without coordinates in the features the model
         has no way to express a location.
     knn_k : int, optional

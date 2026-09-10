@@ -27,22 +27,41 @@ a chunked ``torch.cdist`` + ``topk`` fallback
 ``torch_cluster`` or ``pyg-lib`` and raises ``ImportError`` when neither is installed,
 which is precisely the environment the fallback exists to serve.
 
-Edge orientation
-----------------
-``edge_index[0]`` is the node that aggregates (the query) and ``edge_index[1]`` is its
-neighbour. The attention layers in :mod:`watchmal.model.gat` read
-``row, col = edge_index`` and scatter into ``row``, so this orientation makes a node
-gather from its own k nearest neighbours. It corresponds to
-``torch_cluster.knn_graph(..., flow='target_to_source')``.
+Direct and inverse neighbourhoods
+---------------------------------
+k-nearest-neighbour is a **directed** and **asymmetric** relation: that u is among the k
+nearest PMTs to v does not imply that v is among the k nearest to u. Two edge sets follow
+from it, for a given PMT u:
 
-Stored WatChMaL graph datasets use the opposite convention: in
-``e-_200_qtxyz_pid_knn10`` each identifier repeats exactly k times in ``edge_index[1]``,
-so ``edge_index[0]`` is the neighbour. A model reading such a file therefore aggregates
-over the reverse-kNN neighbourhood, whose degree is not fixed at k. This discrepancy
-predates the present module and also affects any earlier run of
-:class:`watchmal.model.gat.GraphAttentionNetwork`; it is recorded here rather than
-silently corrected, because correcting it would change the numbers produced by every
-existing stored-edge run.
+*direct*
+    edges from u to the PMTs nearest to u. The convolution on u then aggregates over
+    distances measured from u, and u has exactly k edges.
+
+*inverse*
+    edges from u to the PMTs v for which u is among the k nearest. Nothing constrains how
+    many such v exist, so the number of edges per PMT varies with the local hit density.
+
+An undirected graph makes each edge an edge of both endpoints, and direct and inverse
+then coincide; the degree still varies, since it is the size of the union of the two.
+``undirected=True`` is the default and the only setting exercised so far.
+
+Duplicates. Symmetrising produces two copies of every reciprocated edge: a mutually
+nearest pair (u, v) yields (u, v) twice. Within one convolution that would give v twice
+the softmax mass of a neighbour reached by a single edge, which is not the intent — an
+edge should serve both endpoints once each, not one endpoint twice. Reciprocation is the
+common case rather than a corner: on a 3170-hit Hyper-K event, 41.0 % of the symmetrised
+edges at k=4 and 42.7 % at k=8 are duplicates, and the aggregation degree they inflate is
+that of 99.5 % and 100 % of the nodes respectively. The edge set is therefore
+deduplicated, which also removes that fraction of the message-passing work.
+
+Backends do not agree edge for edge. The detector is a regular lattice of PMTs, so exact
+distance ties at the k-th neighbour are common rather than exceptional, and the two
+backends resolve them differently: 7.3 % of the edges differ at k=4 and 5.6 % at k=8,
+measured over five Hyper-K events. See WatChMaL/WatChMaL#123.
+
+Still to establish: whether a directed graph should use the direct or the inverse
+neighbourhood. The stored PyG datasets and this module disagree on that, and only the
+undirected case has been tested.
 """
 
 from typing import Optional
@@ -122,6 +141,18 @@ def _knn_cdist(pos: torch.Tensor, batch: Optional[torch.Tensor], k: int,
     return torch.stack([torch.cat(rows), torch.cat(cols)], dim=0)
 
 
+def _unique_edges(edge_index: torch.Tensor, num_nodes: int) -> torch.Tensor:
+    """Remove repeated (source, target) pairs.
+
+    The pair is encoded as a single integer rather than sorted lexicographically, which
+    is what ``torch.unique(..., dim=1)`` would do: one pass over a 1-D tensor is cheaper
+    than a row-wise sort, and the edge order carries no meaning here.
+    """
+    key = edge_index[0] * num_nodes + edge_index[1]
+    keep = torch.unique(key, sorted=False, return_inverse=False)
+    return torch.stack([keep // num_nodes, keep % num_nodes], dim=0)
+
+
 def build_knn_edge_index(
     pos: torch.Tensor,
     batch: Optional[torch.Tensor] = None,
@@ -145,12 +176,10 @@ def build_knn_edge_index(
         Retain self-loops.
     undirected : bool
         Append the reversed edges, so that a node both queries its own neighbours and
-        answers the nodes that selected it. Duplicate edges are retained: a mutually
-        nearest pair appears twice and therefore receives twice the attention mass
-        after the softmax over ``row``. Deduplication costs more than it saves at these
-        graph sizes; the effect is stated here because it is not visible at the call
-        site. Measured on four collinear points at k=2: 16 edges, 10 unique, 6
-        duplicated.
+        answers the nodes that selected it. The result is deduplicated, so a reciprocated
+        pair contributes one edge to each endpoint rather than two to one; see the module
+        docstring. The degree is then no longer k but the size of the union of the direct
+        and inverse neighbourhoods.
     chunk_size : int
         Query nodes per distance-matrix chunk in the fallback backend.
 
@@ -179,5 +208,6 @@ def build_knn_edge_index(
 
         if undirected:
             edge_index = torch.cat([edge_index, edge_index.flip(0)], dim=1)
+            edge_index = _unique_edges(edge_index, pos.size(0))
 
     return edge_index

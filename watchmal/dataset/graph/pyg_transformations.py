@@ -84,13 +84,8 @@ class Normalize(torch.nn.Module):
 
             for ft_index in range(data.x.size(dim=1)):
                 if self.apply_log[ft_index]:
-                    # log1p, not log: a zero-charge hit is ordinary — 2.0 % of the hits in
-                    # hkfd_emu_rwcs_2k_watchmal.h5 have exactly zero charge — and log(0)
-                    # is -inf, which turns the loss into NaN a few steps later and
-                    # surfaces as an unrelated failure at the end of the run. log1p(0) is
-                    # 0, so the column stays finite and the bounds keep their meaning.
-                    # The bounds are transformed the same way, so a feature at the maximum
-                    # still maps to 1 and one at the minimum to 0.
+                    # log1p to deal with values equal to 0 (e.g. charge when no cut is
+                    # applied). The bounds are transformed the same way.
                     data.x[:, ft_index] = (torch.log1p(data.x[:, ft_index]) - torch.log1p(self.feat_norm[1, ft_index])) / (torch.log1p(self.feat_norm[0, ft_index]) - torch.log1p(self.feat_norm[1, ft_index]) + self.eps)
                 else :
                     data.x[:, ft_index] = (data.x[:, ft_index] - self.feat_norm[1, ft_index]) / (self.feat_norm[0, ft_index] - self.feat_norm[1, ft_index] + self.eps)
@@ -100,8 +95,7 @@ class Normalize(torch.nn.Module):
             
             # Erwan - To do : add support for multi dim target with log norm
             if self.target_apply_log[0]:
-                # log1p for the same reason as the features above: a target of zero is
-                # representable, log(0) is not.
+                # log1p, as for the features above.
                 data.y = (torch.log1p(data.y) - torch.log1p(self.target_norm[1])) / (torch.log1p(self.target_norm[0]) - torch.log1p(self.target_norm[1]) + self.eps)
             else :
                 data.y = (data.y - self.target_norm[1]) / (self.target_norm[0] - self.target_norm[1] + self.eps)

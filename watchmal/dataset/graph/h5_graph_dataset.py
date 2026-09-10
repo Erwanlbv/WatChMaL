@@ -1,27 +1,23 @@
 """
 Graph events assembled from an HDF5 file at load time, with no stored edges.
 
-The alternative shipped in this package, :mod:`watchmal.dataset.graph.pyg_in_memory_20inch_pmt`,
-reads a PyG ``InMemoryDataset`` whose edges were computed offline. That format fixes the
-graph at the moment it is written: changing the number of neighbours, or the coordinates
-the neighbour search runs on, requires rebuilding the whole file. It is also large —
-``edge_index`` accounts for 80 % of the bytes of a stored dataset (40.4 MB of 50.5 MB,
-measured on a 200-event subset at k=5) — and the whole file is loaded into memory.
+The alternative shipped in this package is :mod:`watchmal.dataset.graph.pyg_in_memory_20inch_pmt`,
+which reads a PyG ``InMemoryDataset`` whose edges were computed offline. 
+On the other hand this H5GraphDataset format fixes the graph (i.e. computes the edges) at the moment 
+it is written. The movitivation for this change was mostly convenience 
+1. changing the policy of the edges required to rebuild the whole edge file. 
+2. the edges files are quite large — ``edge_index`` accounts for 80 % of the bytes of a stored dataset 
+(40.4 MB of 50.5 MB, measured on a 200-event subset at k=5) — and the whole file is loaded into memory.
 
-This class keeps the HDF5 file as the stored format, the same one the image datasets
-read, and builds one :class:`torch_geometric.data.Data` per event when the event is
-requested. The object carries the node features in ``x``, the hit coordinates in ``pos``
-and the label in ``y``, and **no** ``edge_index``. The graph is built downstream, inside
-the model's forward pass, from ``pos`` (see :mod:`watchmal.model.knn_edges`), on the
-device the batch already occupies. The number of neighbours therefore becomes a model
-hyper-parameter that can be changed between runs without touching the data.
+Besides this class keeps the HDF5 file as the stored format, (the flat hdf5 format used by the image datasets)
+it also builds one :class:`torch_geometric.data.Data` per event. 
+The object carries the node features in ``x``, the label in ``y``, and **no** ``edge_index``. 
+The graph is built downstream, inside the model's forward pass, from ``pos`` (see :mod:`watchmal.model.knn_edges`), 
+on the device the batch already occupies. 
 
-Hit coordinates are not stored per hit in the HDF5 file; they are looked up in a geometry
-file by PMT identifier, through :class:`watchmal.dataset.common.geometry.DetectorGeometry`,
-which resolves the identifier column and returns every array in identifier order. That
-matters: in ``hyperk_20inch_pmts.npz`` the ``tube_id`` column runs 19746, 19745, 19744, …
-so ``position[i]`` is not the position of PMT ``i``, and indexing directly would displace
-every hit without raising anything.
+Hit coordinates are not stored per hit in the HDF5 file but looked up in a geometry file by PMT identifier, 
+through :class:`watchmal.dataset.common.geometry.DetectorGeometry`, which resolves the identifier column and
+returns every array in identifier order.
 """
 
 import numpy as np
@@ -38,11 +34,6 @@ log = setup_logging(__name__)
 
 # Node feature columns that can be requested by name. Charge and time are per hit and
 # come from the HDF5 file; everything else is per PMT and comes from the geometry file.
-# The coordinates are available as features as well as in `pos` because a model that
-# builds its own edges still needs them as inputs for vertex and direction regression,
-# where the graph topology alone cannot express a location. The cylindrical columns are
-# the same geometry in the detector's own symmetry: r and theta about the tank axis,
-# with cos_theta and sin_theta as the continuous encoding of an angle that wraps.
 _FEATURE_SOURCES = ('charge', 'time',
                     'x', 'y', 'z',
                     'dir_x', 'dir_y', 'dir_z',

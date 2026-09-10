@@ -1,14 +1,6 @@
 """
 Graph attention network for water-Cherenkov event reconstruction.
 
-The model operates on a graph whose nodes are the photomultiplier (PMT) hits of one
-event. Node features carry the hit signal — charge, time, and optionally the hit
-coordinates — and the edges define which hits exchange information. A stack of
-attention blocks refines the node representations, a readout collapses them to one
-vector per event, and a classifier head maps that vector to the task output: class
-scores for particle identification (PID), or continuous components for vertex or
-direction regression.
-
 Two readouts are available and are selected by ``num_cls_tokens``:
 
 ``num_cls_tokens = 0``
@@ -18,14 +10,8 @@ Two readouts are available and are selected by ``num_cls_tokens``:
 ``num_cls_tokens > 0``
     Virtual classification (CLS) nodes are appended to every graph and connected to all
     of that graph's real nodes in both directions; the readout is the concatenation of
-    their final representations. The construction follows the classification token of
-    BERT (Devlin et al., NAACL 2019) and of the Vision Transformer (Dosovitskiy et al.,
-    ICLR 2021). Because the CLS edges are bidirectional, a CLS node is a full virtual
-    node in the sense of Gilmer et al. (ICML 2017) — it both reads from and writes to
-    every hit — and not a passive probe attached at the end. With a sparse
-    k-nearest-neighbour graph this is the principal route by which information crosses
-    the detector: a node's receptive field after ``num_layers`` hops is a local patch,
-    whereas the CLS node is one hop from every hit.
+    their final representations. See Gilmer et al. (ICML 2017) for more details regarding
+    the CLS implementation for GNNs.
 
 Edges are obtained one of two ways, selected by ``knn_k``:
 
@@ -36,17 +22,14 @@ Edges are obtained one of two ways, selected by ``knn_k``:
 ``knn_k = int``
     The k-nearest-neighbour graph is built from ``data.pos`` inside the forward pass, on
     the device the batch already occupies, and any incoming ``edge_index`` is ignored.
-    See :mod:`watchmal.model.knn_edges` for the two backends and for the edge
-    orientation, which differs from that of the stored datasets.
+    See :mod:`watchmal.model.knn_edges`.
 
 Provenance. This class merges the graph attention network of the CAVERN framework with
-the CLS-token and forward-pass-kNN variant developed downstream in GhostHunter, whose
-behaviour was measured on 2026-07-31 across four tasks (PID, energy, direction, vertex).
-Two variants present in those earlier versions are deliberately not carried over: the
-choice between a concatenated residual, ``MLP(cat([x, agg])) + x``, and the additive
-transformer-style residual retained here; and the projection of node features to a wider
-dimension before mean pooling. Only the additive residual remains, so that the layer has
-a single form.
+the CLS-token and forward-pass-kNN variant developed downstream in GhostHunter. Two
+variants present in those earlier versions are not carried over: the choice between a
+concatenated residual, ``MLP(cat([x, agg])) + x``, and the additive transformer-style
+residual retained here; and the projection of node features to a wider dimension before
+mean pooling.
 """
 
 from typing import Optional

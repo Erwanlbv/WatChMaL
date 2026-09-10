@@ -226,12 +226,15 @@ class GraphAttentionNetwork(nn.Module):
             self.cls_tokens = None
             readout_channels = hidden_channels
 
+        # Normalisation then a single linear map. The readout already carries the whole
+        # event: with the CLS readout it is the concatenation of the token
+        # representations, each the output of a full attention stack. A hidden layer here
+        # adds capacity where the representation is already learned, and the depth belongs
+        # in the attention blocks instead.
         classifier_channels = readout_channels + int(use_nhits) + int(use_event_total_charge)
         self.classifier = nn.Sequential(
-            nn.Linear(classifier_channels, hidden_channels),
-            get_activation(activation),
-            nn.LayerNorm(hidden_channels),
-            nn.Linear(hidden_channels, out_channels),
+            nn.LayerNorm(classifier_channels),
+            nn.Linear(classifier_channels, out_channels),
         )
 
     # ------------------------------------------------------------------ #

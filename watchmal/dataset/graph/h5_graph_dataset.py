@@ -17,10 +17,10 @@ device the batch already occupies. The number of neighbours therefore becomes a 
 hyper-parameter that can be changed between runs without touching the data.
 
 Hit coordinates are not stored per hit in the HDF5 file; they are looked up in a geometry
-file by PMT identifier. The lookup is a scatter table rather than a direct row index,
-because the geometry files are not necessarily ordered by identifier: in
-``hyperk_20inch_pmts.npz`` the ``tube_id`` column runs 19746, 19745, 19744, … so
-``position[i]`` is not the position of PMT ``i``, and indexing directly would displace
+file by PMT identifier, through :class:`watchmal.dataset.common.geometry.DetectorGeometry`,
+which resolves the identifier column and returns every array in identifier order. That
+matters: in ``hyperk_20inch_pmts.npz`` the ``tube_id`` column runs 19746, 19745, 19744, …
+so ``position[i]`` is not the position of PMT ``i``, and indexing directly would displace
 every hit without raising anything.
 """
 
@@ -30,17 +30,23 @@ import torch_geometric.data as PyGData
 
 # WatChMaL imports
 from watchmal.dataset.common.h5_dataset import H5Dataset
+from watchmal.dataset.common.geometry import DetectorGeometry
 from watchmal.utils.logging_utils_caverns import setup_logging
 
 log = setup_logging(__name__)
 
 
 # Node feature columns that can be requested by name. Charge and time are per hit and
-# come from the HDF5 file; the coordinates are per PMT and come from the geometry file.
+# come from the HDF5 file; everything else is per PMT and comes from the geometry file.
 # The coordinates are available as features as well as in `pos` because a model that
 # builds its own edges still needs them as inputs for vertex and direction regression,
-# where the graph topology alone cannot express a location.
-_FEATURE_SOURCES = ('charge', 'time', 'x', 'y', 'z')
+# where the graph topology alone cannot express a location. The cylindrical columns are
+# the same geometry in the detector's own symmetry: r and theta about the tank axis,
+# with cos_theta and sin_theta as the continuous encoding of an angle that wraps.
+_FEATURE_SOURCES = ('charge', 'time',
+                    'x', 'y', 'z',
+                    'dir_x', 'dir_y', 'dir_z',
+                    'r', 'theta', 'cos_theta', 'sin_theta')
 
 
 class H5GraphDataset(H5Dataset):
@@ -62,11 +68,14 @@ class H5GraphDataset(H5Dataset):
         Name of the HDF5 array read into ``data.y``. Values are passed through unmapped;
         mapping particle codes to class indices is the job of the ``MapLabels`` transform,
         as it is for the stored datasets.
-    geometry_tube_id_offset : int
-        Value added to a PMT identifier from the HDF5 file to obtain the ``tube_id`` used
-        by the geometry file. 1 when the geometry is 1-based and the HDF5 file is 0-based,
-        which is the case for the Hyper-K and WCTE files; 0 when the two agree. Ignored
-        when the geometry file carries no ``tube_id``.
+    geometry_index_by : {"auto", "identifier", "row"}
+        How the geometry file is indexed. ``"auto"`` honours its identifier column when it
+        has one. ``"row"`` reproduces the historical behaviour, in which the identifier is
+        used as a row number. See
+        :class:`watchmal.dataset.common.geometry.DetectorGeometry`.
+    geometry_id_offset : int or "auto"
+        Value added to a zero-based identifier from the HDF5 file to obtain the identifier
+        used by the geometry file. ``"auto"`` reads it from the file.
     transforms : callable, optional
         Applied to each ``Data`` before it is returned, as for the stored datasets. The
         shipped chain ends in ``ConvertAndToDict``, which produces the
@@ -81,7 +90,8 @@ class H5GraphDataset(H5Dataset):
         geometry_file,
         feature_keys=('charge', 'time'),
         target_key='labels',
-        geometry_tube_id_offset=1,
+        geometry_index_by='auto',
+        geometry_id_offset='auto',
         transforms=None,
         use_memmap=True,
     ):
@@ -95,11 +105,16 @@ class H5GraphDataset(H5Dataset):
             )
         self.feature_keys = feature_keys
         self.transforms = transforms
-        self.geometry_tube_id_offset = int(geometry_tube_id_offset)
 
-        geometry = np.load(geometry_file)
-        self.geometry_positions = np.asarray(geometry['position'], dtype=np.float32)
-        self.pmt_to_geometry_row = self._build_lookup(geometry)
+        self.geometry = DetectorGeometry(
+            geometry_file, id_offset=geometry_id_offset, index_by=geometry_index_by
+        )
+        needs_direction = any(k.startswith('dir_') for k in feature_keys)
+        if needs_direction and self.geometry.direction is None:
+            raise KeyError(
+                f"Node features {[k for k in feature_keys if k.startswith('dir_')]} were "
+                f"requested but {geometry_file} carries no orientation column."
+            )
 
         # set_target defers until initialize(); the parent reloads it from the h5 file.
         self.set_target(target_key)
@@ -109,54 +124,28 @@ class H5GraphDataset(H5Dataset):
             f"edges built downstream from data.pos"
         )
 
-    def _build_lookup(self, geometry):
-        """Table mapping a PMT identifier to its row in the geometry arrays.
-
-        Returns ``None`` when the geometry file carries no ``tube_id``, in which case the
-        identifier is used directly as the row index.
-        """
-        if 'tube_id' not in geometry:
-            log.warning(
-                f"Geometry file has no 'tube_id' array; PMT identifiers will be used "
-                f"directly as row indices into the {self.geometry_positions.shape[0]} "
-                f"geometry rows. This is correct only if the rows are already ordered by "
-                f"identifier."
-            )
-            return None
-
-        tube_id = np.asarray(geometry['tube_id']).astype(np.int64)
-        lookup = np.full(int(tube_id.max()) + 1, -1, dtype=np.int64)
-        lookup[tube_id] = np.arange(tube_id.shape[0], dtype=np.int64)
-        return lookup
-
-    def _positions(self, pmts):
-        if self.pmt_to_geometry_row is None:
-            return self.geometry_positions[pmts]
-
-        identifiers = pmts.astype(np.int64) + self.geometry_tube_id_offset
-        rows = self.pmt_to_geometry_row[identifiers]
-        if np.any(rows < 0):
-            missing = np.unique(identifiers[rows < 0])[:5]
-            raise KeyError(
-                f"PMT identifier(s) {missing.tolist()} are absent from the geometry file. "
-                f"geometry_tube_id_offset is {self.geometry_tube_id_offset}; the usual "
-                f"cause is a 0-based file read against a 1-based geometry, or the reverse."
-            )
-        return self.geometry_positions[rows]
-
     def __getitem__(self, item):
         # The parent sets event_hit_pmts / event_hit_charges / event_hit_times for this
         # event, and initialises the file handles on first use.
         super().__getitem__(item)
 
-        positions = self._positions(self.event_hit_pmts)
+        pmts = self.event_hit_pmts
+        positions = self.geometry.position[pmts]
         columns = {
             'charge': np.asarray(self.event_hit_charges, dtype=np.float32),
             'time': np.asarray(self.event_hit_times, dtype=np.float32),
             'x': positions[:, 0],
             'y': positions[:, 1],
             'z': positions[:, 2],
+            'r': self.geometry.r[pmts],
+            'theta': self.geometry.theta[pmts],
+            'cos_theta': self.geometry.cos_theta[pmts],
+            'sin_theta': self.geometry.sin_theta[pmts],
         }
+        if self.geometry.direction is not None:
+            directions = self.geometry.direction[pmts]
+            columns.update(dir_x=directions[:, 0], dir_y=directions[:, 1],
+                           dir_z=directions[:, 2])
 
         x = torch.from_numpy(
             np.stack([columns[key] for key in self.feature_keys], axis=1)

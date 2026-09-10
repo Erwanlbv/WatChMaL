@@ -400,8 +400,9 @@ def test_geometry_lookup_places_hits_correctly(h5_pid_file, hk_geometry):
     identifiers are not the row numbers.
 
     In hyperk_20inch_pmts.npz the tube_id column runs 19746, 19745, 19744, ..., so
-    indexing position[] with a PMT identifier returns a valid point on the detector that
-    belongs to a different PMT. Nothing raises, the hits still lie on the tank wall, and
+    indexing position[] with a PMT identifier — which geometry_index_by="row" does, and
+    which the image and point-cloud datasets in this package still do — returns a valid
+    point on the detector that belongs to a different PMT. Nothing raises, the hits still lie on the tank wall, and
     the summary statistics of the hit pattern barely move — the mean distance to the five
     nearest hits changes by under 1 %. What does move is the physics: a Cherenkov cone
     lights a region downstream of the interaction vertex along the particle's direction,
@@ -435,8 +436,7 @@ def test_geometry_lookup_places_hits_correctly(h5_pid_file, hk_geometry):
 
     with_lookup = median_opening_angle(dataset)
 
-    scrambled = H5GraphDataset(str(h5_pid_file), str(hk_geometry))
-    scrambled.pmt_to_geometry_row = None
+    scrambled = H5GraphDataset(str(h5_pid_file), str(hk_geometry), geometry_index_by="row")
     without_lookup = median_opening_angle(scrambled)
 
     assert with_lookup < 45.0, (

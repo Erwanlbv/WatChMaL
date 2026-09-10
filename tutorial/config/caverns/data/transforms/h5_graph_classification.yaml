@@ -6,15 +6,6 @@
 
 transforms:
 
-  # Charge is clamped away from zero before the logarithm below: a zero-charge hit would
-  # otherwise produce -inf and turn the loss into NaN a few steps later, where it is
-  # reported as an unrelated failure at the end of the run.
-  Threshold:
-    _target_: watchmal.dataset.graph.pyg_transformations.Threshold
-    key: 'x'
-    min_thresholds: [0.01, null]
-    max_thresholds: [null, null]
-
   AddFeaturesInData:
     _target_: watchmal.dataset.graph.pyg_transformations.AddFeaturesInData
     charge_index: 0
@@ -27,7 +18,9 @@ transforms:
   Normalize:
     _target_: watchmal.dataset.graph.pyg_transformations.Normalize
     eps: !!float 1e-10
-    # Charge spans several decades and is taken logarithmically; time does not.
+    # Charge spans several decades and is taken logarithmically; time does not. The
+    # transform uses log1p, so the 2 % of hits with exactly zero charge are ordinary
+    # values rather than -inf.
     apply_log: [True, False]
     feat_norm:
       - [1000, 1900]    # maxima: charge in photoelectrons, time in nanoseconds

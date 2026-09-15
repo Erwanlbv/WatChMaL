@@ -510,14 +510,24 @@ class FitQun1ParticleFit(RegressionRun, PositionPrediction, DirectionPrediction,
         true_momenta array_like of int, optional
             Array of true momenta for the events in these reconstruction results
         true_labels: int or array_like of int, optional
-            PID label or array of PID labels for the events in these reconstruction results
+            Particle type label or array of labels for the events in these reconstruction results, matched by equality
+            against `particle_label_map` to select the fiTQun fit of each event; a label with no entry in the map
+            raises ValueError, and events with a sentinel label such as -1 must be excluded with `indices`. When
+            `true_momenta` is given or `energy_prediction` is used, the labels also give the mass to convert between
+            momentum and energy: a label whose absolute value has no entry in the mass table then raises ValueError,
+            so the labels must be PDG codes, with a `particle_label_map` of PDG codes (see
+            `watchmal.utils.math.momentum_from_energy`). All events must carry the same matched label: a sample of
+            several species raises a NumPy ValueError when the predictions are assembled, since each fit returns
+            every event.
         indices: array_like of int, optional
             Array of indices of events to select out of the events in the fiTQun output (by default use all events).
         selection: index_expression, optional
             Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
             (by default use all events).
         particle_label_map: dict
-            Dictionary mapping particle type names to label integers. By default, use gamma:0, electron:1, muon:2, pi0:3
+            Dictionary mapping particle type names to the label integers used in `true_labels`, compared by equality.
+            By default, use the class indices gamma:0, electron:1, muon:2, pi0:3. Labels given as PDG codes need
+            {'gamma': 22, 'electron': 11, 'muon': 13, 'pi0': 111}, with antiparticle codes passed as absolute values.
         plot_args: optional
             Additional arguments to pass to plotting functions, used to set the style when plotting these results
             together with other runs' results.
@@ -531,8 +541,26 @@ class FitQun1ParticleFit(RegressionRun, PositionPrediction, DirectionPrediction,
         if particle_label_map is None:
             particle_label_map = {'gamma': 0, 'electron': 1, 'muon': 2, 'pi0': 3}
         self.particle_label_map = particle_label_map
-        self.label_set = set(true_labels)
-        self.particle_indices = {p: (true_labels == l) for p, l in particle_label_map.items() if l in self.label_set}
+        labels = np.asarray(true_labels)
+        self.label_set = set(labels.tolist())
+        # An event whose label has no entry in the map is left out of every fit's selection. When no label of the
+        # sample has an entry, no fit is selected and the predictions stay at zero, without an error unless
+        # true_momenta is given and a label is also absent from the mass table. When only some labels have an entry,
+        # the boolean-mask assignment that assembles the predictions fails with a NumPy ValueError that names array
+        # shapes, not labels (a sample of several matched species fails in the same way).
+        # The likely causes of an unmatched label are a map and labels in different conventions (class indices and PDG
+        # codes; the mass lookup in MomentumPrediction requires PDG codes) and sentinel labels, such as -1, left in
+        # true_labels.
+        unmatched = sorted(self.label_set - set(particle_label_map.values()))
+        if unmatched:
+            raise ValueError(
+                f"true_labels {unmatched} have no entry in particle_label_map {particle_label_map}, so no fiTQun fit "
+                f"would be selected for the events that carry them. The default map gives class indices (gamma: 0, "
+                f"electron: 1, muon: 2, pi0: 3). Labels stored as PDG codes, which the momentum-energy conversion "
+                f"requires, need particle_label_map={{'gamma': 22, 'electron': 11, 'muon': 13, 'pi0': 111}}, with "
+                f"antiparticle codes passed as absolute values. Events with a sentinel label, such as -1, must be "
+                f"excluded with 'indices', and their entries removed from true_labels.")
+        self.particle_indices = {p: (labels == l) for p, l in particle_label_map.items() if l in self.label_set}
         self._momentum_prediction = None
         self._position_prediction = None
         self._direction_prediction = None

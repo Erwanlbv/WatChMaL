@@ -372,7 +372,10 @@ class MomentumPrediction(ABC):
         true_momenta: array_like of float, optional
             Array of true momenta, used in calculating residuals
         true_labels: int or array_like of int, optional
-            PID label or array of PID labels, used to know the particle type to convert between momentum and energy
+            PDG code or array of PDG codes of the true particle type, used to look up the mass to convert between
+            momentum and energy. When the conversion is performed, a label whose absolute value has no entry in the
+            mass table raises ValueError; a mapped class index equal to a listed code would be taken as that species
+            (see `watchmal.utils.math.momentum_from_energy`).
         """
         self.true_labels = true_labels
         self.true_momenta = true_momenta
@@ -394,7 +397,7 @@ class MomentumPrediction(ABC):
 
     @property
     def energy_prediction(self):
-        """Energy prediction calculated from the momentum prediction and true particle type label"""
+        """Energy prediction calculated from the momentum prediction and the mass given by the true PDG code"""
         return math.energy_from_momentum(self.momentum_prediction, self.true_labels)
 
 
@@ -740,7 +743,10 @@ class WatChMaLEnergyRegression(WatChMaLRegression, MomentumPrediction):
         true_momenta: array_like of float, optional
             Array of true momenta for the events in these regression results to calculate momentum prediction residuals
         true_labels: int or array_like of int, optional
-            PID label or array of PID labels for the events in these reconstruction results
+            PDG code or array of PDG codes of the true particle type for the events in these reconstruction results,
+            used to look up the mass to convert between momentum and energy. When the conversion is performed, a label
+            whose absolute value has no entry in the mass table raises ValueError; a mapped class index equal to a
+            listed code would be taken as that species.
         indices: array_like of int, optional
             Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
             by their indices).
@@ -758,7 +764,10 @@ class WatChMaLEnergyRegression(WatChMaLRegression, MomentumPrediction):
 
     @property
     def momentum_prediction(self):
-        """Momentum predictions calculated from predicted energies output from the WatChMaL regression run"""
+        """
+        Momentum predictions calculated from predicted energies output from the WatChMaL regression run, using the mass
+        of the true particle type looked up from `true_labels` as PDG codes
+        """
         if self._momentum_prediction is None:
             self._momentum_prediction = math.momentum_from_energy(self.predictions, self.true_labels)
         return self._momentum_prediction
@@ -785,7 +794,10 @@ class WatChMaLThreeMomentumRegression(WatChMaLRegression, MomentumPrediction, Di
         true_momenta: array_like of float, optional
             Array of true momenta for the events in these regression results to calculate momentum prediction residuals
         true_labels: int or array_like of int, optional
-            PID label or array of PID labels for the events in these reconstruction results
+            PDG code or array of PDG codes of the true particle type for the events in these reconstruction results,
+            used to look up the mass to convert between momentum and energy. When the conversion is performed, a label
+            whose absolute value has no entry in the mass table raises ValueError; a mapped class index equal to a
+            listed code would be taken as that species.
         indices: array_like of int, optional
             Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
             by their indices).

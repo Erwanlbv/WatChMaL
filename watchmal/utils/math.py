@@ -2,10 +2,34 @@
 Utility functions for performing mathematical, physical, statistical, geometrical operations
 """
 
+import logging
+from collections.abc import Mapping
+from types import MappingProxyType
+
 import numpy as np
 
 
+log = logging.getLogger(__name__)
+
 DEFAULT_TANK_AXIS = 1
+
+# Rest masses in MeV, keyed by the absolute value of the PDG Monte Carlo particle code: an antiparticle carries the
+# negative of its particle's code and has the same mass. Values from the Particle Data Group, S. Navas et al., "Review
+# of Particle Physics", Phys. Rev. D 110, 030001 (2024). Read-only, since it is the default argument of
+# momentum_from_energy and energy_from_momentum.
+PDG_MASSES_MEV = MappingProxyType({
+    11: 0.51099895,     # electron
+    13: 105.6583755,    # muon
+    22: 0.0,            # photon
+    111: 134.9768,      # neutral pion
+    211: 139.57039,     # charged pion
+})
+
+# Species names, used only to state the lookup convention in the log.
+_PDG_SPECIES = {11: "electron", 13: "muon", 22: "photon", 111: "neutral pion", 211: "charged pion"}
+
+# Whether the lookup convention has been logged in this process (see _masses_from_pdg_codes).
+_mass_convention_logged = False
 
 
 def towall(position, angle, tank_half_height, tank_radius, tank_axis=None):
@@ -72,51 +96,154 @@ def dwall(position, tank_half_height, tank_radius, tank_axis=None):
     return np.minimum(dwall_barrel, dwall_endcap)
 
 
-def momentum_from_energy(energy, label, particle_masses=np.array((0, 0.511, 105.7, 134.98))):
+def _reset_mass_convention_warning():
+    """Re-arm the once-per-process warning that states the mass lookup convention. For tests only."""
+    global _mass_convention_logged
+    _mass_convention_logged = False
+
+
+def log_mass_convention(particle_masses=PDG_MASSES_MEV):
     """
-    Calculate momentum of particle from total energy and particle type (label)
-    Default labels are 0:gamma, 1:electron, 2:muon, 3:pi0
+    Log, once per process, a warning that states the particle mass lookup convention and the mass table
+
+    The first call in a process logs the warning and sets a module-level flag; later calls do nothing. The
+    momentum-energy conversions call this function before each lookup. `H5CommonDataset.set_target` also calls it when
+    the 'three_momenta' target is requested, in the process that builds the data loaders. When the loaders have
+    workers, the targets are loaded later in them; workers started by fork (`watchmal/dataset/data_utils.py`) inherit
+    the flag, so the warning is logged once in that process instead of once per worker.
+
+    Parameters
+    ----------
+    particle_masses : Mapping, default: PDG_MASSES_MEV
+        mapping from absolute PDG code to particle mass in MeV, listed in the warning
+    """
+    global _mass_convention_logged
+    if _mass_convention_logged:
+        return
+    _mass_convention_logged = True
+    table = "; ".join(f"{c} {_PDG_SPECIES.get(c, 'unnamed')} {float(particle_masses[c])}"
+                      for c in sorted(particle_masses))
+    log.warning("Particle masses for the momentum-energy conversion are looked up by PDG code: labels are read "
+                "as PDG Monte Carlo particle codes and matched by absolute value, so an antiparticle takes the "
+                "mass of its particle. Table (|PDG code| species mass/MeV): %s. Any label whose absolute value is "
+                "not in the table raises ValueError; a mapped class index passes only if it equals a listed "
+                "code.", table)
+
+
+def _masses_from_pdg_codes(pdg_code, particle_masses):
+    """
+    Look up particle masses by the absolute value of the PDG code
+
+    Calls `log_mass_convention` with `particle_masses` before the lookup. A label whose absolute value has no entry in
+    the table raises, rather than receiving some mass. The former lookup indexed a mass array with the label, which
+    gave a wrong mass without any error to labels in another convention: muons stored as class index 0 of the
+    {13: 0, 11: 1, 22: 2} mapping received the photon mass.
+
+    Parameters
+    ----------
+    pdg_code : array_like or int
+        PDG code of particle type or array of PDG codes of particles
+    particle_masses : Mapping
+        mapping from absolute PDG code to particle mass in MeV
+
+    Returns
+    -------
+    np.ndarray or scalar
+        float64 array of masses with the shape of `pdg_code`, or scalar if only one code
+
+    Raises
+    ------
+    TypeError
+        if `particle_masses` is not a mapping
+    ValueError
+        if the absolute value of any code has no entry in `particle_masses`
+    """
+    if not isinstance(particle_masses, Mapping):
+        raise TypeError(f"particle_masses must be a mapping from absolute PDG code to mass in MeV, not "
+                        f"{type(particle_masses).__name__}; masses are not indexed by class label")
+    log_mass_convention(particle_masses)
+    table_codes = sorted(particle_masses)
+    table_masses = np.array([particle_masses[c] for c in table_codes], dtype=np.float64)
+    table_codes = np.array(table_codes, dtype=np.int64)
+    codes = np.abs(np.asarray(pdg_code))
+    known = np.isin(codes, table_codes)
+    if not np.all(known):
+        unknown = np.unique(np.asarray(pdg_code)[~known]).tolist()
+        shown = str(unknown) if len(unknown) <= 20 else f"{unknown[:20]} and {len(unknown) - 20} further values"
+        raise ValueError(f"Particle labels {shown} have no entry in the mass table, which is keyed by |PDG code| "
+                         f"{table_codes.tolist()}. Labels must be PDG Monte Carlo particle codes; mapped class "
+                         f"indices, such as those of a {{13: 0, 11: 1, 22: 2}} mapping, must be converted back to PDG "
+                         f"codes first. The dataset target 'three_momenta' reads the 'labels' array of the HDF5 file "
+                         f"directly, and H5CommonDataset.map_labels does not apply to it, so a file that stores mapped "
+                         f"class indices must be rewritten with PDG codes in 'labels'.")
+    return table_masses[np.searchsorted(table_codes, codes)]
+
+
+def momentum_from_energy(energy, pdg_code, particle_masses=PDG_MASSES_MEV):
+    """
+    Calculate momentum of particle from total energy and particle type, given as a PDG code
+
+    The mass is looked up by the absolute value of the PDG code, so an antiparticle has the mass of its particle. A
+    label whose absolute value has no entry in `particle_masses` raises ValueError. Class indices produced by a label
+    mapping are therefore rejected unless they coincide with a listed code: with the default table, a class index of
+    11, 13, 22, 111 or 211 would be taken as that species. Unless `log_mass_convention` has already run in the process,
+    the call logs a warning stating this convention and the mass table.
 
     Parameters
     ----------
     energy : array_like or scalar
-        energy of particle or vector of energies of particles
-    label : array_like or int
-        integer label of particle type or vector of labels of particles
-    particle_masses : array_like
-        array of particle masses indexed by label
+        total energy of particle in MeV, or vector of energies of particles
+    pdg_code : array_like or int
+        PDG code of particle type or vector of PDG codes of particles
+    particle_masses : Mapping, default: PDG_MASSES_MEV
+        mapping from absolute PDG code to particle mass in MeV
 
     Returns
     -------
     np.ndarray or scalar
         array of momentum values for each energy, or scalar if only one energy
+
+    Raises
+    ------
+    ValueError
+        if the absolute value of any code has no entry in `particle_masses`
     """
     energy = np.asarray(energy)
-    mass = np.asarray(particle_masses[label], dtype=energy.dtype)
+    mass = np.asarray(_masses_from_pdg_codes(pdg_code, particle_masses), dtype=energy.dtype)
     mass = mass[(...,) + (None,) * (energy.ndim - mass.ndim)] # add axes to broadcast to energy along first axis/axes
     return np.sqrt(energy**2 - mass**2)
 
 
-def energy_from_momentum(momentum, label, particle_masses=np.array((0, 0.511, 105.7, 134.98))):
+def energy_from_momentum(momentum, pdg_code, particle_masses=PDG_MASSES_MEV):
     """
-    Calculate total energy of particle from momentum and particle type (label)
-    Default labels are 0:gamma, 1:electron, 2:muon, 3:pi0
+    Calculate total energy of particle from momentum and particle type, given as a PDG code
+
+    The mass is looked up by the absolute value of the PDG code, so an antiparticle has the mass of its particle. A
+    label whose absolute value has no entry in `particle_masses` raises ValueError. Class indices produced by a label
+    mapping are therefore rejected unless they coincide with a listed code: with the default table, a class index of
+    11, 13, 22, 111 or 211 would be taken as that species. Unless `log_mass_convention` has already run in the process,
+    the call logs a warning stating this convention and the mass table.
 
     Parameters
     ----------
     momentum : array_like
-        momentum of particle or vector of energies of particles
-    label : array_like
-        integer label of particle type or vector of labels of particles
-    particle_masses : array_like
-        array of particle masses indexed by label
+        momentum of particle in MeV, or vector of momenta of particles
+    pdg_code : array_like or int
+        PDG code of particle type or vector of PDG codes of particles
+    particle_masses : Mapping, default: PDG_MASSES_MEV
+        mapping from absolute PDG code to particle mass in MeV
 
     Returns
     -------
     np.ndarray or scalar
         array of energy values for each momentum, or scalar if only one momentum
+
+    Raises
+    ------
+    ValueError
+        if the absolute value of any code has no entry in `particle_masses`
     """
-    mass = particle_masses[label]
+    mass = _masses_from_pdg_codes(pdg_code, particle_masses)
     return np.sqrt(momentum**2 + mass**2)
 
 

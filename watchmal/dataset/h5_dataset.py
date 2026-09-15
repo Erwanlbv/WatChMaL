@@ -2,7 +2,7 @@
 Class for loading data in h5 format
 """
 
-from watchmal.utils.math import direction_from_angles, momentum_from_energy
+from watchmal.utils.math import direction_from_angles, log_mass_convention, momentum_from_energy
 
 # torch imports
 from torch.utils.data import Dataset
@@ -24,7 +24,9 @@ class H5CommonDataset(Dataset, ABC):
     ====================================================================================================================
     event_ids         (n_events,)     int32      ID of the event in the ROOT file
     root_files        (n_events,)     object     File name and location of the ROOT file
-    labels            (n_events,)     int32      Label for event classification (gamma=0, electron=1, muon=2)
+    labels            (n_events,)     int32      Particle type label as written by the file producer: PDG codes in
+                                                 some files, mapped class indices in others. The 'three_momenta' target
+                                                 requires PDG codes (see watchmal.utils.math.momentum_from_energy)
     positions         (n_events,1,3)  float32    Initial (x, y, z) position of simulated particle
     angles            (n_events,2)    float32    Initial direction of simulated particle as (polar, azimuth) angles
     energies          (n_events,1)    float32    Initial total energy of simulated particle
@@ -64,6 +66,12 @@ class H5CommonDataset(Dataset, ABC):
         if self.target_key is None:
             self.targets = {}
             return
+        if "three_momenta" in ([target_key] if isinstance(target_key, str) else target_key):
+            # Log the mass lookup convention here, in the rank process, before the deferred loading of the targets.
+            # When the loader has workers, that loading runs in them: workers started by fork, as in
+            # data_utils.get_data_loader, inherit the logged state and do not repeat the warning; workers started by
+            # spawn repeat it on stderr.
+            log_mass_convention()
         if self.initialized:
             try:
                 if isinstance(self.target_key, str):

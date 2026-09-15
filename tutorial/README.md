@@ -48,14 +48,26 @@ Depending onw which cluster you are working you might need to contact :
 
 ```bash
 git clone <this repo> && cd WatChMaL
-pip install -r setup/requirements.txt  
+pip install -r requirements.txt
 ```
 
-Depending on what you run:
+That is the base framework only. Pick the bundle that matches what you're running instead,
+each installs `requirements.txt` plus the right torch build for the target hardware:
 
-- **Graph models (GNN examples)** also need [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html).
-- **Multi-ring segmentation** needs `spconv` (CUDA-specific). On CC-Lyon it ships inside an
-apptainer image — use the launch scripts below rather than installing it yourself.
+- `requirements-ci.txt` — torch CPU + graph (`torch_geometric`) + wandb; what CI and a
+  laptop smoke test use. No `spconv`, no `timm`.
+- `requirements-gpu-images.txt` — torch GPU + CNN/transformer image models + multi-ring
+  (`spconv`, CUDA-specific; on CC-Lyon it ships inside an apptainer image instead — use
+  the launch scripts below rather than installing it yourself).
+- `requirements-gpu-graph.txt` — torch GPU + graph/GNN (`torch_geometric`,
+  `torch_scatter`, `torch_cluster`).
+- `requirements-full.txt` — everything, mirroring the cluster's own training image.
+
+```bash
+pip install -r requirements-gpu-graph.txt   # example: GPU graph training
+```
+
+Also:
 - **Multi-ring diagnostics plots** come from an optional submodule — *not* needed for
 training or the smoke test:
   ```bash

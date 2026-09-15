@@ -1,0 +1,26 @@
+# CI / laptop-dev bundle: torch CPU + every optional family that CI actually exercises,
+# so `pip install -r requirements-ci.txt` is everything needed to run tests/tier0
+# through tests/tier3 and `python main.py ...` on a laptop or a CPU-only GitHub runner.
+#
+# Deliberately excludes (not needed by anything CI runs):
+#   - torch_scatter / torch_cluster: not mandatory for the graph family CI covers - the
+#     Tier 3 graph fixture builds its knn with torch.cdist instead of torch_cluster, and
+#     the modules that need torch_scatter (no_conv_mlp.py, mPMT_gat_pooling.py, ...)
+#     aren't reached by any committed CI config. See requirements-gpu-graph.txt.
+#   - spconv: Linux/CUDA only, no macOS/CPU wheel exists. See requirements-gpu-images.txt.
+#   - timm: no transformer model config is exercised by CI.
+#
+# tests/tier1's "core" job installs plain `requirements.txt` ALONE (see that workflow's
+# header) to prove wandb/torch_geometric never leak into an eager import - do not point
+# that job at this file, it would defeat the check.
+#
+#   pip install -r requirements-ci.txt
+
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+
+-r requirements.txt
+-r test-requirements.txt
+
+torch_geometric
+wandb

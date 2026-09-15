@@ -14,8 +14,7 @@
 #
 # Who needs them, as of this writing:
 #   torch_scatter -> watchmal/model/no_conv_mlp.py, mPMT_gat_pooling.py, mPMT_gat_augmem.py
-#   torch_cluster -> watchmal/dataset/gnn/gnn_dataset.py,
-#                    watchmal/dataset/graph/h5_datatools_format_dataset.py
+#   torch_cluster -> watchmal/dataset/gnn/gnn_dataset.py
 # The WCTE mPMT GAT config (tutorial/config/caverns/main/wcte_mpmt_gat_classification.yaml)
 # cannot run without them.
 #

@@ -18,11 +18,6 @@ used for creating graph datasets.
 
 """
 
-# À FAIRE : 
-# 30/01 :  - Ajouter une erreur si les tailles de feat/target_norm et du nombre de features dans data.x/y ne correspondent pas
-#          - Ajouter de la doc sur les appels [0] et [1]
-# 14/02 :  - Mettre à jour la doc de cette fonction
-
 class Normalize(torch.nn.Module):
     """Normalize a torch_geometric Data object with mean and standard deviation.
     Given mean: ``(mean[1],...,mean[n])`` and std: ``(std[1],..,std[n])`` for ``n``

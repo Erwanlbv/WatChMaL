@@ -17,19 +17,20 @@ Edges are obtained one of two ways, selected by ``knn_k``:
 
 ``knn_k = None``
     ``data.edge_index`` is read off the batch. This is the path used by the stored PyG
-    datasets, whose edges were computed offline.
+    datasets, where the edges have to be computed offline.
 
 ``knn_k = int``
-    The k-nearest-neighbour graph is built from ``data.pos`` inside the forward pass, on
-    the device the batch already occupies, and any incoming ``edge_index`` is ignored.
-    See :mod:`watchmal.model.knn_edges`.
+    The k-nearest-neighbour graph is built from ``data.pos`` inside the forward pass (on
+    the device the batch already occupies). See :mod:`watchmal.model.knn_edges`.
+    Note : Any incoming ``edge_index`` is ignored.
 
-Provenance. This class merges the graph attention network of the CAVERN framework with
-the CLS-token and forward-pass-kNN variant developed downstream in GhostHunter. Two
-variants present in those earlier versions are not carried over: the choice between a
-concatenated residual, ``MLP(cat([x, agg])) + x``, and the additive transformer-style
-residual retained here; and the projection of node features to a wider dimension before
-mean pooling.
+This class merges the graph attention network of the CAVERN framework with
+the CLS-token. Two variants present in earlier versions are not carried over: 
+the choice between a concatenated residual, ``MLP(cat([x, agg])) + x``, and 
+the additive transformer-style residual retained here; and the projection of 
+node features to a wider dimension before mean pooling.
+
+Note (Erwan) : if anyone wants to do a study of the residual policy concat vs add, feel free !
 """
 
 from typing import Optional
@@ -56,7 +57,7 @@ class AttentionBlock(nn.Module):
     to the edges of the graph: for every edge ``(row, col)`` the score is
     ``Q[row] . K[col] / sqrt(head_dim)``, the softmax normalises over all edges sharing
     the same ``row``, and the weighted values are accumulated into ``row``. The node in
-    ``edge_index[0]`` is therefore the one that aggregates.
+    ``edge_index[0]`` is the one that aggregates.
     """
 
     def __init__(self, hidden_channels: int, num_heads: int, activation: str,
@@ -89,8 +90,6 @@ class AttentionBlock(nn.Module):
         value = self.v_proj(x).view(-1, self.num_heads, self.head_dim)
 
         scores = (query[row] * key[col]).sum(-1) / self.head_dim ** 0.5
-        # num_nodes is passed explicitly: inferring it from the edge index would drop
-        # trailing nodes that have no incoming edge.
         weights = softmax(scores, index=row, num_nodes=x.size(0))
         aggregated = scatter(weights.unsqueeze(-1) * value[col], row, dim=0,
                              dim_size=x.size(0), reduce='sum')
@@ -104,13 +103,13 @@ class AttentionBlock(nn.Module):
 
 class GraphAttentionNetwork(nn.Module):
     """Graph attention network with an optional CLS-token readout.
-
+    More about the idea behind the cls token : http://arxiv.org/abs/2201.12674
+    
     Parameters
     ----------
     in_channels : int
         Number of node feature columns in ``data.x``. It must equal the width the
-        dataset and its transforms produce; nothing checks this at construction, and a
-        mismatch surfaces as a shape error in the first forward pass.
+        dataset and its transforms produce; nothing checks this at construction.
     hidden_channels : int
         Width of the node representations. Must be divisible by ``num_heads``.
     out_channels : int
@@ -124,31 +123,22 @@ class GraphAttentionNetwork(nn.Module):
     num_cls_tokens : int
         Virtual CLS nodes appended to every graph. ``0`` selects global mean pooling.
     mlp_expansion_factor : int
-        Width multiplier of the feed-forward network inside each block. At
-        ``hidden_channels=128``, ``num_layers=4``, ``num_heads=4`` and the default value
-        of 4, the blocks hold 727 040 of the model's 744 710 parameters (97.6 %).
+        Width multiplier of the feed-forward network inside each block.
     activation : str
-        One of ``relu``, ``gelu``, ``silu``.
+        One of ``relu``, ``gelu``, ``silu``. More vcan added if necessary.
     node_encoder_input_norm : bool
         Normalise the raw node features across channels before the node encoder. Off by
-        default; see :class:`watchmal.model.node_encoder.NodeEncoder` for why enabling it
-        discards per-channel scale.
+        default; see :class:`watchmal.model.node_encoder.NodeEncoder`.
     node_encoder_hidden_norm : bool
         Normalise inside the node encoder, between its activation and its second linear
-        layer.
+        layer. (RMS or LayerNorm can be used.)
     position_dim : int
         Number of leading columns of ``data.pos`` concatenated onto ``data.x`` before the
         node encoder. ``0`` leaves the features untouched, which is correct when the
         coordinates are already columns of ``data.x`` or when the task does not need
-        them. **Setting it above 0 appends ``data.pos`` unscaled.** No transform in this
-        package normalises ``pos``, since the neighbour search needs it in detector units,
-        so the encoder would receive centimetres beside features scaled to [0, 1]: on one
-        Hyper-K event the charge and time columns then carry 0.00 % of the input variance
-        (1.0e-02 and 1.3e-02 against 3.0e+06, 3.2e+06 and 4.6e+06), and the model does not
-        learn. Prefer listing the coordinates among the dataset's feature columns, where
-        they are scaled with everything else. Energy and PID can be learned from the graph topology alone; vertex and
-        direction regression cannot, since without coordinates in the features the model
-        has no way to express a location.
+        them. **Setting it above 0 appends ``data.pos`` unscaled.** No transform currently
+        normalises ``pos`` (since the neighbour search has only been done in detector units so far),
+        so the encoder would receive centimetres beside features scaled to [0, 1].**
     knn_k : int, optional
         Neighbours per node when the edges are built in the forward pass from
         ``data.pos``. ``None`` reads ``data.edge_index`` off the batch instead.
@@ -217,9 +207,7 @@ class GraphAttentionNetwork(nn.Module):
 
         # Normalisation then a single linear map. The readout already carries the whole
         # event: with the CLS readout it is the concatenation of the token
-        # representations, each the output of a full attention stack. A hidden layer here
-        # adds capacity where the representation is already learned, and the depth belongs
-        # in the attention blocks instead.
+        # representations, each the output of a full attention stack. 
         classifier_channels = readout_channels + int(use_nhits) + int(use_event_total_charge)
         self.classifier = nn.Sequential(
             nn.LayerNorm(classifier_channels),
@@ -274,7 +262,7 @@ class GraphAttentionNetwork(nn.Module):
         node of that graph in both directions.
 
         Returns the augmented ``(x, edge_index, batch)`` and the number of real nodes,
-        which is the offset at which the CLS block starts.
+        (which is the offset at which the CLS block starts).
         """
         num_real = x.size(0)
         device = x.device

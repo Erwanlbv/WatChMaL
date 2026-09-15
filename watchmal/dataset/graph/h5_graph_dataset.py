@@ -25,7 +25,7 @@ import torch
 import torch_geometric.data as PyGData
 
 # WatChMaL imports
-from watchmal.dataset.common.h5_dataset import H5Dataset
+from watchmal.dataset.h5_dataset import H5Dataset
 from watchmal.dataset.common.geometry import DetectorGeometry
 from watchmal.utils.logging_utils_caverns import setup_logging
 

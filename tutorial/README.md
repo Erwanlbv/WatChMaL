@@ -116,6 +116,8 @@ written as the in-container mount points (see [option 1](#option-1--container-re
 | ---------------------------------- | ------------------------------ | ------------------------------------ | ---------------------------------------------------------------------- |
 | GCN classification                 | `gcn_classification`           | —                                    | `tutorial/config/caverns/data/dataset/20inch_pmt_knn5_classification.yaml`    |
 | Vanilla GAT classification         | `gat_classification`           | `gat_classification_container`       | same as above                                                          |
+| GAT classification, CLS readout    | `gat_cls_classification`       | —                                    | same as above                                                          |
+| GAT classification, CLS readout, graphs built from HDF5 | `gat_cls_knn_h5_classification` | — | `tutorial/config/caverns/data/dataset/hk_h5_graph_classification.yaml`, and `MapLabels.label_set` in `data/transforms/h5_graph_classification.yaml` |
 | Vanilla GAT vertex regression      | `gat_vertex_regression`        | `gat_vertex_regression_container`    | `tutorial/config/caverns/data/dataset/20inch_pmt_knn5_vertex_regression.yaml` |
 | WCTE mPMT GAT classification       | `wcte_mpmt_gat_classification` | —                                    | `tutorial/config/caverns/data/dataset/wcte_mpmt_classification.yaml`          |
 | Multi-ring segmentation (train)    | `multiring_segmentation_train` | container-only (needs `spconv`)      | override `data.dataset.params.base_dir=...` on the command line        |
@@ -126,6 +128,13 @@ The shipped defaults point at shared reference data on CC-Lyon — fine for a fi
 there. Everywhere else, see
 [docs/cclyon_user_specific_paths.md](../docs/cclyon_user_specific_paths.md) for the full list
 of paths to change.
+
+`hk_h5_graph_classification.yaml` is the exception: it reads a flat HDF5 file and a geometry
+file rather than stored graphs, and ships placeholder paths (`/path/to/your/...`); no
+reference data for it are listed in `docs/cclyon_user_specific_paths.md`. Set `h5_path`,
+`geometry_file` and `split_path` before a first run; the class and
+its constraints are described in
+[the dataset README](config/caverns/data/dataset/README.md#h5graphdataset--flat-hdf5-events-graphs-assembled-at-load-time).
 
 ### Pick a way to launch it
 
@@ -352,11 +361,11 @@ This is how one shared `loss/` folder serves any task.
 
 | Group                                                          | Sets                                                | Shipped options                                             |
 | -------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------- |
-| `main/`                                                        | entry points — one file per experiment              | the 5 tutorials                                             |
+| `main/`                                                        | entry points — one file per experiment              | one per example in the table above                          |
 | `engine/`                                                      | engine class (`_target_`) that runs the tasks       | `gnn_classifier`, `gnn_regressor`, `multiring/segmentation` |
-| `data/dataset/`                                                | dataset class + paths + preprocessing               | in-memory graph tutorials, `multiring_sparse3d`             |
-| `data/transforms/`                                             | data transformations / augmentation                 | classification, regression                                  |
-| `model/`                                                       | network architecture (`_target_` + hyperparameters) | GCN, vanilla GAT, multi-ring segmentation                   |
+| `data/dataset/`                                                | dataset class + paths + preprocessing               | in-memory graph tutorials, `hk_h5_graph_classification` (graphs built from HDF5), `multiring_sparse3d` |
+| `data/transforms/`                                             | data transformations / augmentation                 | classification, regression, HDF5 graph classification       |
+| `model/`                                                       | network architecture (`_target_` + hyperparameters) | GCN, GAT (mean-pool or CLS readout; stored or forward-pass kNN edges), multi-ring segmentation |
 | `tasks/train/`, `tasks/evaluate/`, `tasks/restore_best_state/` | what the job does: epochs, batch sizes, loaders...  | tutorials + `segmentation`                                  |
 | `loss/`                                                        | loss function                                       | CE, BCE, MSE, Huber, smooth, `set_ce_dice`                  |
 | `optimizers/`                                                  | optimizer                                           | Adam variants                                               |

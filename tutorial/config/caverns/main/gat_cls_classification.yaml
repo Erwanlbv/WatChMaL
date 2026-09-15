@@ -1,12 +1,14 @@
-# Classification with the CLS-token readout of the graph attention network.
-# This config demonstrates how to use the GraphAttentionNetwork with vanilla attention for graph classification
+# Graph classification with the classification-token (CLS) readout, on stored PyG graphs.
 #
-# Launch (same pattern as tutorial/launch/caverns/run_main_cclyon.sh: --config-path points at
-# main/, and hydra.searchpath adds the tutorial/config/caverns root so the group defaults resolve):
+# Differs from gat_classification.yaml in the model only: model/gat_cls_classifier.yaml reads
+# the event representation off virtual CLS nodes instead of averaging the hit representations.
+#
+# Launch from the repository root. --config-path points at main/, and hydra.searchpath adds
+# the tutorial/config/caverns root so that the group defaults resolve:
 #   python main.py \
-#       --config-path /ABS/PATH/TO/tutorial/config/caverns/main --config-name gat_classification \
-#       hydra.searchpath=[/ABS/PATH/TO/tutorial/config/caverns]
-# Set your dataset paths (split_path + graph_folder_path) in
+#       --config-path tutorial/config/caverns/main --config-name gat_cls_classification \
+#       'hydra.searchpath=[file://tutorial/config/caverns]'
+# Set the dataset paths (split_path, graph_folder_path) in
 #   tutorial/config/caverns/data/dataset/20inch_pmt_knn5_classification.yaml
 
 MASTER_PORT: 12356

@@ -1,13 +1,19 @@
-# Tutorial config for VanillaGAT model - Classification task
-# This config demonstrates how to use the GraphAttentionNetwork with vanilla attention for graph classification
+# Graph classification from a flat WatChMaL HDF5 file, with the graph built in the forward pass.
 #
-# Launch (same pattern as tutorial/launch/caverns/run_main_cclyon.sh: --config-path points at
-# main/, and hydra.searchpath adds the tutorial/config/caverns root so the group defaults resolve):
+# The dataset, data/dataset/hk_h5_graph_classification.yaml (H5GraphDataset), assembles one
+# PyG Data per event and stores no edges; the model, model/gat_cls_knn_classifier.yaml, builds
+# the k-nearest-neighbour graph from data.pos and reads the event off a CLS node. The class,
+# its settings and the constraints between them are described in
+# tutorial/config/caverns/data/dataset/README.md.
+#
+# Launch from the repository root:
 #   python main.py \
-#       --config-path /ABS/PATH/TO/tutorial/config/caverns/main --config-name gat_classification \
-#       hydra.searchpath=[/ABS/PATH/TO/tutorial/config/caverns]
-# Set your dataset paths (split_path + graph_folder_path) in
-#   tutorial/config/caverns/data/dataset/20inch_pmt_knn5_classification.yaml
+#       --config-path tutorial/config/caverns/main --config-name gat_cls_knn_h5_classification \
+#       'hydra.searchpath=[file://tutorial/config/caverns]'
+# Set h5_path, geometry_file and split_path in
+#   tutorial/config/caverns/data/dataset/hk_h5_graph_classification.yaml
+# and MapLabels.label_set in tutorial/config/caverns/data/transforms/h5_graph_classification.yaml:
+# [13, 11] for labels stored as PDG codes, [0, 1] for Felix Cormier's layout.
 
 MASTER_PORT: 12356
 core: caverns

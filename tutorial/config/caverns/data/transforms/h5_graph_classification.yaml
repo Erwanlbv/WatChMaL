@@ -1,4 +1,5 @@
-# Transforms for the run-time HDF5 graph datasets with node features [charge, time].
+# Transforms for the run-time HDF5 graph datasets with node features
+# [charge, time, x, y, z], the order set by feature_keys in the dataset config.
 #
 # The column order differs from data/transforms/20inch_pmt_classification.yaml, which
 # describes stored datasets whose first column is time. Feature order is not portable
@@ -30,7 +31,9 @@ transforms:
 
   MapLabels:
     _target_: watchmal.dataset.graph.pyg_transformations.MapLabels
-    # Particle codes in the HDF5 'labels' array, mapped to 0, 1, ... in this order.
+    # Values of the HDF5 'labels' array, mapped to 0, 1, ... in this order, which must
+    # match target_names. PDG codes here; a file in Felix Cormier's layout stores the labels
+    # already mapped as {13: 0, 11: 1, 22: 2}, and needs [0, 1] instead.
     label_set:
       - 13  # mu-
       - 11  # e-

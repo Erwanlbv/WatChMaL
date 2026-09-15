@@ -59,7 +59,7 @@ PMT-level graphs only (mPMT transforms not yet supported — see
 ## `H5GraphDataset` — flat HDF5 events, graphs assembled at load time
 
 `watchmal.dataset.graph.h5_graph_dataset.H5GraphDataset` (a subclass of
-`watchmal.dataset.common.h5_dataset.H5Dataset`).
+`watchmal.dataset.h5_dataset.H5Dataset`).
 
 **What it does.** The class reads the flat WatChMaL HDF5 layout — the one the image
 datasets read: `hit_pmt`, `hit_time`, `hit_charge` and `event_hits_index`, plus one array

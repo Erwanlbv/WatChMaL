@@ -3,8 +3,8 @@ Graph events assembled from an HDF5 file at load time, with no stored edges.
 
 The alternative shipped in this package is :mod:`watchmal.dataset.graph.pyg_in_memory_20inch_pmt`,
 which reads a PyG ``InMemoryDataset`` whose edges were computed offline. 
-On the other hand this H5GraphDataset format fixes the graph (i.e. computes the edges) at the moment 
-it is written. The movitivation for this change was mostly convenience 
+The stored format fixes the graph (i.e. computes the edges) at the moment
+it is written. The motivation for this change was mostly convenience 
 1. changing the policy of the edges required to rebuild the whole edge file. 
 2. the edges files are quite large — ``edge_index`` accounts for 80 % of the bytes of a stored dataset 
 (40.4 MB of 50.5 MB, measured on a 200-event subset at k=5) — and the whole file is loaded into memory.
@@ -25,7 +25,7 @@ import torch
 import torch_geometric.data as PyGData
 
 # WatChMaL imports
-from watchmal.dataset.common.h5_dataset import H5Dataset
+from watchmal.dataset.h5_dataset import H5Dataset
 from watchmal.dataset.common.geometry import DetectorGeometry
 from watchmal.utils.logging_utils_caverns import setup_logging
 

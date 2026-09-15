@@ -102,7 +102,7 @@ asserts both regimes. The reader accepts `tube_id` or `tube_no` as the identifie
 | -------------------- | --------------------------------------------------------------------------------------------------------- |
 | `h5_path`            | the flat WatChMaL HDF5 file                                                                               |
 | `geometry_file`      | `.npz` holding `position` of shape `(n_pmts, 3)`; it must describe the detector the HDF5 file was produced for |
-| `geometry_index_by`  | `auto` (default) honours the identifier column when present; `identifier` requires it; `row` uses the identifier as a row number, which is what the image and point-cloud datasets do |
+| `geometry_index_by`  | `auto` (default) honours the identifier column when present; `identifier` requires it; `row` uses the identifier as a row number, which is what the image datasets do |
 | `geometry_id_offset` | value added to a zero-based `hit_pmt` to obtain the geometry's identifier; `auto` reads it from the smallest identifier in the file |
 | `feature_keys`       | node feature columns, in order, from `charge`, `time`, `x`, `y`, `z`, `dir_x`, `dir_y`, `dir_z`, `r`, `theta`, `cos_theta`, `sin_theta` |
 | `target_key`         | HDF5 array read into `data.y`, unmapped (default `labels`)                                                |

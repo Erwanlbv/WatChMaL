@@ -1,4 +1,0 @@
-_target_: watchmal.dataset.pointnet.pointnet_mpmt_dataset.PointNetMultiPMTDataset
-geometry_file: /fast_scratch/WatChMaL/data/geometries/geo_mPMTshort.npz
-use_orientations: False
-max_points: null

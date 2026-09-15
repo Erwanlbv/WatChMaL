@@ -26,11 +26,10 @@ reordered so that row ``p`` holds the PMT whose zero-based identifier is ``p``. 
 sites therefore keep indexing by row and become correct without further change.
 
 **It is used by the graph datasets only.** The image datasets
-(:mod:`watchmal.dataset.cnn`, :mod:`watchmal.dataset.cnn_mpmt`) and the point-cloud
-ones (:mod:`watchmal.dataset.pointnet`) still read the file directly and index it by
-row, and remain subject to everything described above. Converting them is a change to
-those pipelines rather than to the graph one, and is out of the scope of the work that
-introduced this module.
+(:mod:`watchmal.dataset.cnn`, :mod:`watchmal.dataset.cnn_mpmt`) still read the file
+directly and index it by row, and remain subject to everything described above.
+Converting them is a change to those pipelines rather than to the graph one, and is out
+of the scope of the work that introduced this module.
 
 The formats differ in three further ways, all absorbed here:
 
@@ -201,7 +200,7 @@ class DetectorGeometry:
         log.warning(
             f"{geometry_file}: '{identifier_key}' is not in ascending order, so the rows "
             f"have been permuted into identifier order. Indexing this file by row — which "
-            f"the image and point-cloud datasets in this package still do — assigns "
+            f"the image datasets in this package still do — assigns "
             f"each hit the coordinates of a different PMT."
         )
         return order, offset

@@ -7,8 +7,7 @@ ordered by identifier, and the geometry files in use disagree on that, on the na
 identifier column and on the name of the orientation column. `DetectorGeometry` resolves
 all three at load time and hands back arrays in identifier order, so the row indexing at
 the call sites becomes correct without being rewritten. The graph datasets read through
-it; the image and point-cloud datasets do not, and remain subject to the row-order
-assumption.
+it; the image datasets do not, and remain subject to the row-order assumption.
 
 These tests are synthetic and need no detector data, so they run in CI. The one check
 against a real file skips when it is absent.

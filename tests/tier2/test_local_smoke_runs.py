@@ -401,13 +401,13 @@ def test_geometry_lookup_places_hits_correctly(h5_pid_file, hk_geometry):
 
     In hyperk_20inch_pmts.npz the tube_id column runs 19746, 19745, 19744, ..., so
     indexing position[] with a PMT identifier — which geometry_index_by="row" does, and
-    which the image and point-cloud datasets in this package still do — returns a valid
-    point on the detector that belongs to a different PMT. Nothing raises, the hits still lie on the tank wall, and
-    the summary statistics of the hit pattern barely move — the mean distance to the five
-    nearest hits changes by under 1 %. What does move is the physics: a Cherenkov cone
-    lights a region downstream of the interaction vertex along the particle's direction,
-    so the charge-weighted centroid of the hits should lie near that direction, and under
-    a scrambled assignment it does not.
+    which the image datasets in this package still do — returns a valid point on the
+    detector that belongs to a different PMT. Nothing raises, the hits still lie on the
+    tank wall, and the summary statistics of the hit pattern barely move — the mean
+    distance to the five nearest hits changes by under 1 %. What does move is the
+    physics: a Cherenkov cone lights a region downstream of the interaction vertex along
+    the particle's direction, so the charge-weighted centroid of the hits should lie
+    near that direction, and under a scrambled assignment it does not.
     """
     import h5py
     from watchmal.dataset.graph.h5_graph_dataset import H5GraphDataset

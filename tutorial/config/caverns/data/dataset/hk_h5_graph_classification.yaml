@@ -32,8 +32,8 @@ dataset_parameters:
   # How the geometry file is indexed. 'auto' honours its identifier column (tube_id or
   # tube_no) when it has one, which is required for hyperk_20inch_pmts.npz and a no-op
   # for the Super-K and WCTE files, whose rows are already in identifier order. 'row'
-  # uses the identifier as a row number, which is what the image and point-cloud datasets
-  # still do; it is the setting to reproduce a run made that way.
+  # uses the identifier as a row number, which is what the image datasets still do; it is
+  # the setting to reproduce a run made that way.
   geometry_index_by: auto
   # Value added to a 0-based identifier from the HDF5 file to reach the geometry's own.
   # 'auto' reads it from the smallest identifier in the file.

@@ -10,11 +10,18 @@ engine are always picked as a pair in the main config.
 | File | Class | Task | Shipped config |
 |---|---|---|---|
 | `gcns.py` | `BaseGCN` | graph classification | `model/gcn_classifier.yaml` |
-| `gat.py` | `GraphAttentionNetwork` | graph classification / regression | `model/vanilla_gat_classifier.yaml`, `model/vanilla_gat_vertex_regressor.yaml` |
+| `gat.py` | `GraphAttentionNetwork` | graph classification / regression | `model/vanilla_gat_classifier.yaml`, `model/gat_cls_classifier.yaml`, `model/vanilla_gat_vertex_regressor.yaml` |
 | `no_conv_mlp.py` | `NoConvMLP` | MLP baseline (no message passing) | — |
-| `node_encoder.py` | `NodeEncoder` | shared node-embedding building block | — |
+| `node_encoder.py` | `NodeEncoder` | shared node-embedding building block, and `get_activation` | — |
+| `knn_edges.py` | `build_knn_edge_index` | k-nearest-neighbour edges built inside a forward pass | — |
 | `mPMT_gat_pooling.py` | `HierarchicalGAT` | two-level PMT → mPMT GAT (WCTE) | `model/mpmt_gat_pooling.yaml` |
 | `mPMT_gat_augmem.py` | `HierarchicalGAT` | memory-augmented variant of the above | — |
+
+`GraphAttentionNetwork` covers both readouts. `num_cls_tokens: 0` averages the hit
+representations; `num_cls_tokens: 1` or more appends virtual classification nodes joined
+to every hit of their own event and reads the event representation off them. Setting
+`knn_k` moves edge construction into the forward pass, from `data.pos`, which requires a
+dataset that stores hit coordinates there — the stored PyG datasets do not.
 
 Pair these with the graph engines: `engine/gnn_classifier.yaml`
 (→ `watchmal.engine.graph.classification.ClassifierEngine`) or `engine/gnn_regressor.yaml`

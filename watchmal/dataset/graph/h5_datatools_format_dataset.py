@@ -6,6 +6,7 @@ import torch
 
 # WatChMaL imports
 from watchmal.dataset.common.h5_dataset import H5Dataset
+from watchmal.dataset.common.geometry import DetectorGeometry
 
 # pyg imports
 import torch_geometric.data as PyGData
@@ -15,7 +16,8 @@ from torch_cluster import knn_graph
 
 
 class GnnDataset(H5Dataset):
-    def __init__(self, h5file, geometry_file, k_neighbors, transforms=None, is_distributed=True, use_memmap=True):
+    def __init__(self, h5file, geometry_file, k_neighbors, transforms=None, is_distributed=True, use_memmap=True,
+                 geometry_index_by='auto', geometry_id_offset='auto'):
         """
         Args:
             h5file              ... path to h5 dataset file
@@ -26,9 +28,13 @@ class GnnDataset(H5Dataset):
         """
         super().__init__(h5file, use_memmap)
 
-        geo_file = np.load(geometry_file, 'r')
-        self.geo_positions = geo_file['position'].astype(np.float32)
-        self.geo_orientations = geo_file['orientation'].astype(np.float32)
+        # Ordered by PMT identifier: indexing this file by row assigns each hit
+        # the coordinates of a different PMT whenever the rows are not already in
+        # identifier order, which is the case for hyperk_20inch_pmts.npz.
+        geometry = DetectorGeometry(geometry_file, id_offset=geometry_id_offset,
+                                    index_by=geometry_index_by)
+        self.geo_positions = geometry.position
+        self.geo_orientations = geometry.direction
 
         self.k_neighbors = k_neighbors
 

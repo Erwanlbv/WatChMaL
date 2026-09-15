@@ -1,0 +1,62 @@
+# Graph classification from a flat WatChMaL HDF5 file, with the graph built in the forward pass.
+#
+# The dataset, data/dataset/hk_h5_graph_classification.yaml (H5GraphDataset), assembles one
+# PyG Data per event and stores no edges; the model, model/gat_cls_knn_classifier.yaml, builds
+# the k-nearest-neighbour graph from data.pos and reads the event off a CLS node. The class,
+# its settings and the constraints between them are described in
+# tutorial/config/caverns/data/dataset/README.md.
+#
+# Launch from the repository root:
+#   python main.py \
+#       --config-path tutorial/config/caverns/main --config-name gat_cls_knn_h5_classification \
+#       'hydra.searchpath=[file://tutorial/config/caverns]'
+# Set h5_path, geometry_file and split_path in
+#   tutorial/config/caverns/data/dataset/hk_h5_graph_classification.yaml
+# and MapLabels.label_set in tutorial/config/caverns/data/transforms/h5_graph_classification.yaml:
+# [13, 11] for labels stored as PDG codes, [0, 1] for Felix Cormier's layout.
+
+MASTER_PORT: 12356
+core: caverns
+find_unused_parameters: True  # graph/MR models can leave params unused each forward; opt in explicitly
+seed: 1234
+
+# Fully deterministic mode: same config + same seed -> identical numbers on this
+# machine (deterministic kernels only, no cuDNN autotuning, python/numpy RNGs seeded).
+# Costs some speed, and raises if an op has no deterministic implementation - set
+# deterministic_warn_only: True to downgrade that to a warning. See
+# watchmal/utils/determinism.py.
+deterministic: False
+gpu_list: []  # Set to [0, 1, ...] to use specific GPUs
+
+# kind: pyg_in_memory
+launch_wandb: False  # Set to True if you want to use wandb logging
+
+defaults:
+    # Wandb configuration (only used if launch_wandb: True)
+    - wandb: tutorial
+    - model: gat_cls_knn_classifier
+    
+    - engine: gnn_classifier
+    
+    # Dataset configuration - using tutorial dataset config
+    - data/dataset@data.dataset: hk_h5_graph_classification
+    - data/transforms@data.transforms: h5_graph_classification
+    
+    # Training configuration
+    - tasks/train: gnn_train
+    - sampler@tasks.train.data_loaders.train.sampler_config: subset_random
+    - sampler@tasks.train.data_loaders.validation.sampler_config: subset_sequential
+    
+    - loss@tasks.train.loss: cross_entropy
+    - optimizers@tasks.train.optimizers: adam
+    
+    - scheduler@tasks.train.scheduler: reduce_lr_on_plateau
+    - scheduler@tasks.train.early_stopping: early_stopping
+    
+    - tasks/restore_best_state: restore_best
+    
+    # Evaluation configuration
+    - tasks/evaluate: gnn_evaluate
+    - sampler@tasks.evaluate.data_loaders.test.sampler_config: subset_sequential
+    
+    - _self_

@@ -73,17 +73,29 @@ def get_dataset(
     base_pyg_folder = dict_config.pop("pyg_data_folder_path", None) or dict_config.pop("folder_path", None) or dict_config.pop("graph_folder_path", None)
     pyg_data_file_names = dict_config.pop("pyg_data_file_names", None) or dict_config.pop("graph_file_names", None)
     
-    if base_pyg_folder is None:
+    # A dataset that assembles its graphs at load time rather than reading a collated file
+    # has no folder of stored tensors to point at; everything it needs is already in
+    # dataset_parameters. It is instantiated below, once the transforms exist.
+    builds_at_load_time = base_pyg_folder is None and pyg_data_file_names is None
+    if builds_at_load_time and '_target_' not in dict_config:
+        raise ValueError(
+            "dataset_parameters must contain either a stored-dataset location "
+            "('pyg_data_folder_path', 'folder_path' or 'graph_folder_path') or a "
+            "'_target_' for a dataset that builds its graphs at load time"
+        )
+
+    if not builds_at_load_time and base_pyg_folder is None:
         raise ValueError("dataset_parameters must contain 'pyg_data_folder_path', 'folder_path', or 'graph_folder_path'")
-    if pyg_data_file_names is None or len(pyg_data_file_names) == 0:
+    if not builds_at_load_time and (pyg_data_file_names is None or len(pyg_data_file_names) == 0):
         raise ValueError("dataset_parameters must contain 'pyg_data_file_names' or 'graph_file_names' (non-empty list)")
-    
-    # Normalize folder paths to list (single str → one-element list)
-    folder_paths = list(base_pyg_folder) if isinstance(base_pyg_folder, (list, ListConfig)) else [base_pyg_folder]
-    
-    n_files = len(pyg_data_file_names)
-    assert n_files in (1, 2), f"pyg_data_file_names must have length 1 (20-inch) or 2 (MPMT), got {n_files}"
-    assert len(folder_paths) > 0, "At least one folder path is required"
+
+    if not builds_at_load_time:
+        # Normalize folder paths to list (single str → one-element list)
+        folder_paths = list(base_pyg_folder) if isinstance(base_pyg_folder, (list, ListConfig)) else [base_pyg_folder]
+
+        n_files = len(pyg_data_file_names)
+        assert n_files in (1, 2), f"pyg_data_file_names must have length 1 (20-inch) or 2 (MPMT), got {n_files}"
+        assert len(folder_paths) > 0, "At least one folder path is required"
 
     # Instantiate transforms
     transform_compose = None
@@ -102,6 +114,10 @@ def get_dataset(
     #         transform = instantiate(trf_config)
     #         mPMT_transform_list.append(transform)
     #     mPMT_transform_compose = T.Compose(mPMT_transform_list)
+
+    if builds_at_load_time:
+        log.info(f"No stored graph folder; instantiating {dict_config['_target_']} directly")
+        return instantiate(dict_config, transforms=transform_compose)
 
     ## Instantiating the dataset(s)
     if len(folder_paths) == 1:

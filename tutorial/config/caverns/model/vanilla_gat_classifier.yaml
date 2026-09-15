@@ -1,3 +1,9 @@
+# Graph attention network for classification, mean-pooling readout.
+#
+# in_channels must equal the number of node feature columns the dataset and its
+# transforms produce, and out_channels must equal len(data.dataset.target_names).
+# Neither is injected at runtime; a mismatch surfaces as a shape error in the first
+# forward pass.
 _target_: watchmal.model.gat.GraphAttentionNetwork
 
 hidden_channels: 20
@@ -6,6 +12,9 @@ num_layers: 3
 in_channels: 2
 out_channels: 2
 
+# 0 selects global mean pooling over the hits. See model/gat_cls_classifier.yaml for
+# the classification-token readout.
+num_cls_tokens: 0
+
 use_nhits: True
 use_event_total_charge: True
-attention_type: 'vanilla'  # Options: 'vanilla' or 'concat_and_wo_mlp'

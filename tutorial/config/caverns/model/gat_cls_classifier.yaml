@@ -1,0 +1,38 @@
+# Graph attention network for classification, classification-token (CLS) readout.
+#
+# Differs from model/vanilla_gat_classifier.yaml in the readout only: virtual CLS nodes
+# are connected to every hit of their own graph in both directions, and their final
+# representations are concatenated to form the event vector, instead of averaging the
+# hit representations. With a sparse k-nearest-neighbour graph the CLS nodes are the
+# principal route by which information crosses the detector, since a hit's receptive
+# field after num_layers hops is a local patch.
+_target_: watchmal.model.gat.GraphAttentionNetwork
+
+hidden_channels: 128
+num_heads: 4
+num_layers: 4
+in_channels: 2
+out_channels: 2
+
+# Number of virtual CLS nodes per event. The readout width is
+# hidden_channels * num_cls_tokens.
+num_cls_tokens: 1
+
+# Width multiplier of the feed-forward network in each attention block. At the settings
+# above this term holds 97.6 % of the parameters.
+mlp_expansion_factor: 4
+
+activation: relu
+
+# Off by default: normalising the raw node features across channels removes each hit's
+# scale and offset, and for in_channels=2 leaves only the sign of the difference. See
+# the NodeEncoder docstring. Per-channel scaling belongs in data/transforms.
+node_encoder_input_norm: False
+
+use_nhits: True
+use_event_total_charge: True
+
+# Edges in the forward pass. Requires a dataset that populates data.pos; the stored PyG
+# datasets do not, so these stay off here.
+#   knn_k: 8
+#   position_dim: 3

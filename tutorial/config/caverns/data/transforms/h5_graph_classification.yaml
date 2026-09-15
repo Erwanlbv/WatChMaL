@@ -1,0 +1,44 @@
+# Transforms for the run-time HDF5 graph datasets with node features
+# [charge, time, x, y, z], the order set by feature_keys in the dataset config.
+#
+# The column order differs from data/transforms/20inch_pmt_classification.yaml, which
+# describes stored datasets whose first column is time. Feature order is not portable
+# between datasets, and a wrong charge_index feeds time to the network as charge.
+
+transforms:
+
+  AddFeaturesInData:
+    _target_: watchmal.dataset.graph.pyg_transformations.AddFeaturesInData
+    charge_index: 0
+    feature_names:
+      - 'n_hits'
+      - 'event_total_charge'
+    max_vals: [6000., 12000.]
+    min_vals: [120., 140.]
+
+  Normalize:
+    _target_: watchmal.dataset.graph.pyg_transformations.Normalize
+    eps: !!float 1e-10
+    # Charge spans several decades and is taken logarithmically; time does not. The
+    # transform uses log1p, so the 2 % of hits with exactly zero charge are ordinary
+    # values rather than -inf.
+    apply_log: [True, False, False, False, False]
+    feat_norm:
+      # maxima, then minima, per column: charge (pe), time (ns), x, y, z (cm).
+      # The detector half-extent is 3242.96 cm in x and y, 3296.47 cm in z.
+      - [1000, 1900, 3242.96, 3242.96, 3296.47]
+      - [0.01, 550, -3242.96, -3242.96, -3296.47]
+
+  MapLabels:
+    _target_: watchmal.dataset.graph.pyg_transformations.MapLabels
+    # Values of the HDF5 'labels' array, mapped to 0, 1, ... in this order, which must
+    # match target_names. PDG codes here; a file in Felix Cormier's layout stores the labels
+    # already mapped as {13: 0, 11: 1, 22: 2}, and needs [0, 1] instead.
+    label_set:
+      - 13  # mu-
+      - 11  # e-
+
+  ConvertAndToDict:
+    _target_: watchmal.dataset.graph.pyg_transformations.ConvertAndToDict
+    feature_to_type: float32
+    target_to_type: int64

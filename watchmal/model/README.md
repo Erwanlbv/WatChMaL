@@ -16,6 +16,7 @@ engine are always picked as a pair in the main config.
 | `knn_edges.py` | `build_knn_edge_index` | k-nearest-neighbour edges built inside a forward pass | — |
 | `mPMT_gat_pooling.py` | `HierarchicalGAT` | two-level PMT → mPMT GAT (WCTE) | `model/mpmt_gat_pooling.yaml` |
 | `mPMT_gat_augmem.py` | `HierarchicalGAT` | memory-augmented variant of the above | — |
+| `cherp.py` | `CheRP` | Set Transformer/Perceiver-style refinement of `gat.py`: token-bottleneck cross-attention, CLS readout, classification and regression. Does not use the graph edges (still works with graph engine) | — |
 
 `GraphAttentionNetwork` covers both readouts. `num_cls_tokens: 0` averages the hit
 representations; `num_cls_tokens: 1` or more appends virtual classification nodes joined

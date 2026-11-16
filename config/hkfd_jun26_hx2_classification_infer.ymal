@@ -1,0 +1,53 @@
+model:
+  num_input_channels: 5
+  num_output_channels: 4
+  conv_pad_mode: zeros
+  _target_: watchmal.model.resnet.resnet152
+  first_kernel_size: 4
+  first_stride: 2
+  shift_inv_channels:
+  - 0
+engine:
+  _target_: watchmal.engine.classification.ClassifierEngine
+  target_key: labels
+  label_set:
+  - 22
+  - 11
+  - 13
+  - 111
+tasks:
+  restore_state:
+    weight_file: /fred/oz233/aatta/ML/outputs/2026/09/03/new_4class_classifier_cont/outputs/ClassifierEngine_ResNet_BEST.pth
+  evaluate:
+    loss:
+      _target_: torch.nn.CrossEntropyLoss
+      weight: null
+    data_loaders:
+      test:
+        sampler:
+          _target_: watchmal.dataset.samplers.SubsetSequentialSampler
+        split_key: test_idxs
+        batch_size: 256
+        num_workers: 4
+    report_interval: 10
+amp: true
+gpu_list:
+- 0
+seed: null
+dump_path: /fred/oz233/aatta/ML/outputs/2026/09/15/new_4class_classifier_cont_evaluation/outputs/
+data:
+  dataset:
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
+    h5file: /fred/oz233/aatta/ML/data/hkfd/PG_samples/gempi0_40M_contig.h5
+    pmt_positions_file: /fred/oz233/aatta/ML/data/hkfd/HK_HybridmPMT_WithOD_Realistic_mapping_squashed.npz
+    channel_scale_factor:
+      positions: 10000
+      time: 100
+      charge: 10
+    geometry_file: /fred/oz233/aatta/ML/data/hkfd/HK_HybridmPMT_WithOD_Realistic_geo_dump.npz
+    use_positions: true
+    use_padding: false
+    use_median_unhit_times: true
+    transforms:
+    - double_cover
+  split_path: /fred/oz233/aatta/ML/data/hkfd/PG_samples/gempi0_40M_PC_nhit.npz

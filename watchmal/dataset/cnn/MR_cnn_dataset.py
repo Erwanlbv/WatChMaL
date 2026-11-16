@@ -10,10 +10,9 @@ from torch.utils.data import Dataset
 import h5py
 import numpy as np
 from glob import glob
-from pathlib import Path
+import os
 from abc import ABC
 
-np.set_printoptions(threshold=np.inf)
 # WatChMaL imports
 import watchmal.dataset.data_utils as du
 from watchmal.utils.math import momentum_from_energy
@@ -31,7 +30,7 @@ class MRSegDataset(Dataset, ABC):
     
     Attributes loaded per ring:
     - energy: float (SCALAR)
-    - event_type: int (SCALAR)
+    - labels: int (SCALAR), converted from event_type
     - particle_dir_x, particle_dir_y, particle_dir_z: float (SCALAR)
     - particle_start_x, particle_start_y, particle_start_z: float (SCALAR)
     - tube_ids: array of int (variable length)
@@ -61,7 +60,8 @@ class MRSegDataset(Dataset, ABC):
         geometry_file=None,
         use_invalid_value=False,
         use_median_unhit_times=False,
-        use_log_charge=False,  
+        use_log_charge=False,
+        label_set=None,
     ):
         """
         Initialize the hierarchical HDF5 dataset.
@@ -107,12 +107,17 @@ class MRSegDataset(Dataset, ABC):
             Whether to set unhit times to the median value of the normalised hit times
         use_log_charge: bool
             Whether to logarithmically transform the charge.
+        label_set: sequence of labels
+            Raw labels to map to indices before loading targets. For momentum regression, follow the order in momentum_from_energy()
+            gamma, electron, muon, and neutral pion (e.g. [22, 11, 13, 111]). 
         """
 
         # Capture total number of rings to be processed
         self.h5_files = None
+        self._h5_handles = {}
+        self._h5_pid = None
 
-        self.label_set = None
+        self.label_set = None if label_set is None else tuple(dict.fromkeys(label_set))
         self.labels_key = None
         self.target_key = None
         self.targets = None
@@ -253,7 +258,36 @@ class MRSegDataset(Dataset, ABC):
             except Exception as e:
                 print(f"Error reading {h5_path}: {e}")
                 raise
-    
+
+    def _get_h5_file(self, file_idx):
+        """Lazily open each file once in the process that reads the samples."""
+        pid = os.getpid()
+        if self._h5_pid != pid:
+            # A forked worker must not read through handles inherited from its parent.
+            self.close()
+            self._h5_pid = pid
+        if file_idx not in self._h5_handles:
+            self._h5_handles[file_idx] = h5py.File(self.h5_files[file_idx], "r")
+        return self._h5_handles[file_idx]
+
+    def close(self):
+        """Release this process's cached HDF5 handles."""
+        for handle in self._h5_handles.values():
+            handle.close()
+        self._h5_handles = {}
+        self._h5_pid = None
+
+    def __getstate__(self):
+        # Spawned DataLoader workers open their own handles on first access.
+        state = self.__dict__.copy()
+        state["_h5_handles"] = {}
+        state["_h5_pid"] = None
+        return state
+
+    def __del__(self):
+        if hasattr(self, "_h5_handles"):
+            self.close()
+
     def _load_ring_data(self, file_idx, event_id, ring_id):
         """
         Load data for a specific ring from an HDF5 file.
@@ -272,48 +306,37 @@ class MRSegDataset(Dataset, ABC):
         dict
             Dictionary containing ring data
         """
-        h5_path = self.h5_files[file_idx]
-        
-        with h5py.File(h5_path, 'r') as h5_file:
-            ring_group = h5_file[event_id][ring_id]
+        h5_file = self._get_h5_file(file_idx)
+        ring_group = h5_file[event_id][ring_id]
+
+        # Load scalar attributes
+        energy = float(ring_group['energy'][()])
+        labels = int(ring_group['event_type'][()])
+        particle_dir_x = float(ring_group['particle_dir_x'][()])
+        particle_dir_y = float(ring_group['particle_dir_y'][()])
+        particle_dir_z = float(ring_group['particle_dir_z'][()])
+
+        particle_start_x = float(ring_group['particle_start_x'][()])
+        particle_start_y = float(ring_group['particle_start_y'][()])
+        particle_start_z = float(ring_group['particle_start_z'][()])
             
-            # Load scalar attributes
-            energy = float(ring_group['energy'][()])
-            event_type = int(ring_group['event_type'][()])
-            if event_type==22:
-                event_type = 0
-            elif event_type==11:
-                event_type = 1
-            elif event_type==13:
-                event_type = 2
-            elif event_type==211:
-                event_type = 3
+        # Load array attributes
+        tube_ids = np.array(ring_group['tube_ids'], dtype=np.int32)
+        pmt_charge = np.array(ring_group['pmt_charge'], dtype=np.float32)
+        pmt_time = np.array(ring_group['pmt_time'], dtype=np.float32)
             
-            particle_dir_x = float(ring_group['particle_dir_x'][()])
-            particle_dir_y = float(ring_group['particle_dir_y'][()])
-            particle_dir_z = float(ring_group['particle_dir_z'][()])
+        ring_dict = {
+            'energy': energy,
+            'labels': labels,
+            'particle_dir': np.array([particle_dir_x, particle_dir_y, particle_dir_z], dtype=np.float32),
+            'particle_start': np.array([particle_start_x, particle_start_y, particle_start_z], dtype=np.float32),
+            'tube_ids': tube_ids,
+            'pmt_charge': pmt_charge,
+            'pmt_time': pmt_time,
+            'n_hits': len(tube_ids),
+        }
             
-            particle_start_x = float(ring_group['particle_start_x'][()])
-            particle_start_y = float(ring_group['particle_start_y'][()])
-            particle_start_z = float(ring_group['particle_start_z'][()])
-            
-            # Load array attributes
-            tube_ids = np.array(ring_group['tube_ids'], dtype=np.int32)
-            pmt_charge = np.array(ring_group['pmt_charge'], dtype=np.float32)
-            pmt_time = np.array(ring_group['pmt_time'], dtype=np.float32)
-            
-            ring_dict = {
-                'energy': energy,
-                'event_type': event_type,
-                'particle_dir': np.array([particle_dir_x, particle_dir_y, particle_dir_z], dtype=np.float32),
-                'particle_start': np.array([particle_start_x, particle_start_y, particle_start_z], dtype=np.float32),
-                'tube_ids': tube_ids,
-                'pmt_charge': pmt_charge,
-                'pmt_time': pmt_time,
-                'n_hits': len(tube_ids),
-            }
-            
-            return ring_dict
+        return ring_dict
     
     def process_data(self, hit_pmts, hit_times, hit_charges):
         if self.one_indexed:
@@ -417,9 +440,12 @@ class MRSegDataset(Dataset, ABC):
         file_idx, event_id, ring_id = self.ring_index[idx]        
         self.ring_data = self._load_ring_data(file_idx, event_id, ring_id)
 
-        self.set_target(self.target_key)
+        # Convert raw labels into sequential labels before computing three_momenta
+        self.unmapped_labels = np.asarray(self.ring_data['labels'])
         if self.label_set is not None:
             self.map_labels(self.label_set)
+        else:
+            self.set_target(self.target_key)
 
         data_dict = {k: t.copy() for k, t in self.targets.items()}
         data_dict["indices"] = idx
@@ -470,17 +496,17 @@ class MRSegDataset(Dataset, ABC):
                     three_momenta, 
                     log_momenta, 
                     positions,
-                    event_type,
-                    energy
+                    labels,
+                    energy,
         '''
         if target_key == "directions":
             return self.ring_data['particle_dir']
         elif target_key == "three_momenta":
             directions = self.ring_data['particle_dir']
-            momenta = momentum_from_energy(self.ring_data['energy'], self.ring_data['event_type'])[..., None]
+            momenta = momentum_from_energy(self.ring_data['energy'], self.ring_data['labels'])[..., None]
             return directions*momenta
         elif target_key == "log_momenta":
-            momenta = momentum_from_energy(self.ring_data['energy'], self.ring_data['event_type'])[..., None]
+            momenta = momentum_from_energy(self.ring_data['energy'], self.ring_data['labels'])[..., None]
             return np.log(momenta)
         elif target_key == "positions":
             return self.ring_data['particle_start']
@@ -489,22 +515,21 @@ class MRSegDataset(Dataset, ABC):
 
     def map_labels(self, label_set):
         """
-        Maps the labels of the dataset into a range of integers from 0 up to N-1, where N is the number of unique labels
-        in the provided label set. Used only for classification.
-
-        Parameters
-        ----------
-        label_set: sequence of labels
-            Set of all possible labels to map onto the range of integers from 0 to N-1, where N is the number of unique
-            labels.
+        Map raw ring labels before loading classification or regression targets.
+        Labels are mapped to their positions in the configured sequence. For
+        momentum regression, this order must match momentum_from_energy's mass
+        table: gamma, electron, muon, neutral pion. The original raw label is kept
+        so repeated calls cannot remap an already mapped value.
         """
-        self.label_set = set(label_set)
-        if self.targets:
-            self.unmapped_labels = self.targets[self.target_key]
-            labels = np.ndarray(self.unmapped_labels.shape, dtype=np.int64)
-            for i, l in enumerate(self.label_set):
-                labels[self.unmapped_labels == l] = i
-            self.targets[self.target_key] = labels
+        self.label_set = tuple(dict.fromkeys(label_set))
+        if self.unmapped_labels is not None:
+            if not np.all(np.isin(self.unmapped_labels, self.label_set)):
+                raise ValueError(f"Label {self.unmapped_labels} is not in label_set {self.label_set}")
+            labels = np.empty(self.unmapped_labels.shape, dtype=np.int64)
+            for i, label in enumerate(self.label_set):
+                labels[self.unmapped_labels == label] = i
+            self.ring_data['labels'] = labels
+            self.set_target(self.target_key)
 
     def double_cover(self, data_dict):
         """

@@ -1,0 +1,88 @@
+model:
+  num_input_channels: 5
+  num_output_channels: 4
+  conv_pad_mode: zeros
+  _target_: watchmal.model.resnet.resnet152
+  first_kernel_size: 4
+  first_stride: 2
+  shift_inv_channels:
+  - 0
+engine:
+  _target_: watchmal.engine.classification.ClassifierEngine
+  target_key: labels
+  label_set:
+  - 22
+  - 11
+  - 13
+  - 111
+tasks:
+  train:
+    optimizers:
+      _target_: watchmal.optimizer.AdamW2D.AdamW2D
+      lr: 0.01
+      weight_decay: 0.005
+    scheduler:
+      _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+      T_max: 890088
+      eta_min: 1.0e-06
+    loss:
+      _target_: torch.nn.CrossEntropyLoss
+      weight: null
+    data_loaders:
+      train:
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+        split_key: train_idxs
+        batch_size: 256
+        num_workers: 8
+        pre_transforms: null
+      validation:
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+        split_key: val_idxs
+        batch_size: 256
+        num_workers: 8
+        drop_last: true
+    num_val_batches: 690
+    val_interval: 2000
+    epochs: 6
+    checkpointing: false
+    save_interval: 1
+  restore_best_state:
+    name: null
+  evaluate:
+    loss:
+      _target_: torch.nn.CrossEntropyLoss
+      weight: null
+    data_loaders:
+      test:
+        sampler:
+          _target_: watchmal.dataset.samplers.SubsetSequentialSampler
+        split_key: test_idxs
+        batch_size: 256
+        num_workers: 8
+    report_interval: 10
+amp: true
+gpu_list:
+- 0
+- 1
+- 2
+- 3
+seed: null
+dump_path: /fred/oz233/aatta/ML/outputs/2026/08/16/new_4class_classifier/outputs/
+data:
+  dataset:
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
+    h5file: /fred/oz233/aatta/ML/data/hkfd/PG_samples/gempi0_40M_contig.h5
+    pmt_positions_file: /fred/oz233/aatta/ML/data/hkfd/HK_HybridmPMT_WithOD_Realistic_mapping_squashed.npz
+    channel_scale_factor:
+      positions: 10000
+      time: 100
+      charge: 10
+    geometry_file: /fred/oz233/aatta/ML/data/hkfd/HK_HybridmPMT_WithOD_Realistic_geo_dump.npz
+    use_positions: true
+    use_padding: false
+    use_median_unhit_times: true
+    transforms:
+    - double_cover
+  split_path: /fred/oz233/aatta/ML/data/hkfd/PG_samples/gempi0_40M_PC_nhit.npz

@@ -1,0 +1,43 @@
+[2026-10-30T11:02:20.198] error: _nvml_set_freqs: Failed to set memory clock frequency (877) for the GPU: Not Supported
+Could not set frequencies for all GPUs. Set 0/1 total GPUs
+INFO:    underlay of /etc/localtime required more than 50 (106) bind mounts
+INFO:    underlay of /usr/bin/nvidia-cuda-mps-control required more than 50 (503) bind mounts
+INFO:    underlay of /usr/share/nvidia/nvoptix.bin required more than 50 (70) bind mounts
+Error executing job with overrides: ['gpu_list=[0]']
+Traceback (most recent call last):
+  File "/workspace/work/ml/main.py", line 146, in <module>
+    main()
+  File "/opt/conda/lib/python3.10/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/opt/conda/lib/python3.10/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/opt/conda/lib/python3.10/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/opt/conda/lib/python3.10/site-packages/hydra/_internal/utils.py", line 223, in run_and_report
+    raise ex
+  File "/opt/conda/lib/python3.10/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+  File "/opt/conda/lib/python3.10/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+  File "/opt/conda/lib/python3.10/site-packages/hydra/_internal/hydra.py", line 132, in run
+    _ = ret.return_value
+  File "/opt/conda/lib/python3.10/site-packages/hydra/core/utils.py", line 260, in return_value
+    raise self._return_value
+  File "/opt/conda/lib/python3.10/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+  File "/workspace/work/ml/main.py", line 69, in main
+    main_worker_function(0, config)
+  File "/workspace/work/ml/main.py", line 138, in main_worker_function
+    getattr(engine, task)(**task_config)
+  File "/workspace/work/ml/watchmal/engine/reconstruction.py", line 467, in evaluate
+    self.inference(report_interval, with_metrics=True)
+  File "/workspace/work/ml/watchmal/engine/reconstruction.py", line 423, in inference
+    outputs, metrics = self.step(False, True)
+  File "/workspace/work/ml/watchmal/engine/reconstruction.py", line 233, in step
+    with autocast(enabled=self.amp_dtype is not None, dtype=self.amp_dtype):
+  File "/opt/conda/lib/python3.10/site-packages/torch/cuda/amp/autocast_mode.py", line 34, in __init__
+    super().__init__(
+  File "/opt/conda/lib/python3.10/site-packages/torch/amp/autocast_mode.py", line 306, in __init__
+    raise RuntimeError(
+RuntimeError: Current CUDA Device does not support bfloat16. Please switch dtype to float16.
+srun: error: ccwgslurm0112: task 0: Exited with exit code 1

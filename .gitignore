@@ -104,6 +104,10 @@ ENV/
 input/
 saved/
 datasets/
+sample/
+sample_1R/
+reco_sample/
+reco1R_sample/
 
 # testing
 testing/

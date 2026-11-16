@@ -1,0 +1,121 @@
+**********************************************************************
+*                         SLURM Batch System                         *
+*              IN2P3 Computing Centre, Villeurbanne FR               *
+**********************************************************************
+* Date:                 Fri Oct 30 11:02:19 AM CET 2026
+* Job name:             mr_seg_class_infer
+* Job id:               62815553
+* User:                 zhu
+* Account:              hyperk
+* Submit host:          cca013
+* Partition:            gpu_v100
+* Quality of service:   gpu
+* Nodelist:             ccwgslurm0112
+* Operating System:     Red Hat Enterprise Linux release 9.8 (Plow)
+* Architecture:         x86_64
+**********************************************************************
+Job: mr_seg_class_infer (62815553) on ccwgslurm0112
+CUDA_VISIBLE_DEVICES: 0
+Fri Oct 30 11:02:20 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.178.04             Driver Version: 580.178.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  Tesla V100-PCIE-32GB           On  |   00000000:18:00.0 Off |                    0 |
+| N/A   35C    P0             39W /  250W |       0MiB /  32768MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+Binding repo: /sps/hyperk/zhu/WatChMaL
+Image: /sps/hyperk/zhu/WatChMaL/env/ml_image.sif
+Data : /sps/hyperk/zhu/WatChMaL/datasets/seg_mathias  ->  /workspace/work/data
+Code : /sps/hyperk/zhu/WatChMaL  ->  /workspace/work/ml
+[2026-10-30 11:02:28,429][watchmal.utils.logging_utils][WARNING] - WARNING: The git repository has uncommitted changes. Please commit changes before running WatChMaL code for proper version control
+[2026-10-30 11:02:28,429][__main__][INFO] - Using the following git version of WatChMaL repository: workshop_2025-141-g3ba9287-dirty
+[2026-10-30 11:02:28,440][__main__][INFO] - Running with the following config:
+model:
+  num_input_channels: 5
+  num_output_channels: 4
+  conv_pad_mode: zeros
+  _target_: watchmal.model.resnet.resnet152
+  first_kernel_size: 4
+  first_stride: 2
+  shift_inv_channels:
+  - 0
+engine:
+  _target_: watchmal.engine.classification.ClassifierEngine
+  target_key: labels
+  label_set:
+  - 22
+  - 11
+  - 13
+  - 111
+tasks:
+  restore_state:
+    weight_file: /workspace/work/best/ClassifierEngine_ResNet_BEST.pth
+  evaluate:
+    loss:
+      _target_: torch.nn.CrossEntropyLoss
+      weight: null
+    data_loaders:
+      test:
+        sampler:
+          _target_: watchmal.dataset.samplers.SubsetSequentialSampler
+        split_key: test_idxs
+        batch_size: 256
+        num_workers: 4
+    report_interval: 10
+amp: true
+gpu_list:
+- 0
+seed: null
+dump_path: ./outputs/
+data:
+  split_path: /workspace/work/index_lists/TOT_infer.npz
+  dataset:
+    _target_: watchmal.dataset.cnn.MR_cnn_dataset.MRSegDataset
+    file_pattern: /workspace/work/data/**.h5
+    geometry_file: /workspace/work/geometry/HK_HybridmPMT_WithOD_Realistic_geo_dump.npz
+    pmt_positions_file: /workspace/work/geometry/HK_HybridmPMT_WithOD_Realistic_mapping_squashed.npz
+    one_indexed: true
+    channel_scale_offset:
+      _delete_: true
+    channel_scale_factor:
+      positions: 10000
+      time: 100
+      charge: 10
+    use_positions: true
+    use_padding: false
+    use_median_unhit_times: true
+    transforms:
+    - double_cover
+
+[2026-10-30 11:02:28,440][__main__][INFO] - Output directory: ./outputs/
+[2026-10-30 11:02:28,451][__main__][INFO] - Only one device found, not using multiprocessing...
+[2026-10-30 11:02:28,503][__main__][INFO] - Running main worker function rank 0 on device: cuda:0
+[2026-10-30 11:02:36,392][watchmal.engine.reconstruction][INFO] - AMP enabled: True
+Found 100 HDF5 files
+Total rings (samples): 12029
+[2026-10-30 11:02:37,322][watchmal.engine.reconstruction][INFO] - Restoring state from /workspace/work/best/ClassifierEngine_ResNet_BEST.pth
+[2026-10-30 11:02:38,217][watchmal.engine.reconstruction][INFO] - Evaluating, output to directory: ./outputs/
+****************************************************************
+*                      SLURM Batch System                      *
+*           IN2P3 Computing Centre, Villeurbanne FR            *
+****************************************************************
+Date: Fri Oct 30 11:03:03 AM CET 2026
+Job informations can be found using these commands:
+Accounting:
+sacct -j 62815553
+Efficiency:
+seff 62815553
+****************************************************************

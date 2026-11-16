@@ -1,0 +1,77 @@
+# Inference with the June-2026 ResNet-152 electron 3-MOMENTUM model.
+#
+# HOW TO USE
+#   1. copy this file into the `config/` directory of your WatChMaL checkout
+#      (branch hkfd_jun26 of https://github.com/nickwp/WatChMaL)
+#   2. edit the two lines marked "EDIT ME" below to point at YOUR data
+#   3. check the composed config without running anything:
+#        python main.py --config-name=hkfd_jun26_hx2_regression_e_3mom_infer -c job
+#   4. run it:
+#        python main.py --config-name=hkfd_jun26_hx2_regression_e_3mom_infer
+#
+# See /sps/hyperk/common/resnet_hkfd_jun26_modelcards/INFERENCE.md for the full explanation.
+
+defaults:
+  - model: resnet152_hkfd            # ResNet-152, 5 input channels, HK far detector
+  - engine: regression               # regression engine (predicts numbers, not classes)
+  - tasks/restore_state: restore_state   # <- load the trained weights ...
+  - tasks/evaluate: test_hkfd            # <- ... then run over the test set. ORDER MATTERS.
+  - _self_                           # everything below overrides the groups above
+
+# ---------------------------------------------------------------- what to predict
+engine:
+  target_key:
+    - three_momenta
+model:
+  num_output_channels: 3             # (px, py, pz) in MeV/c
+
+# ---------------------------------------------------------------- run settings
+amp: false                           # the model was trained in full fp32; keep it that way
+gpu_list: [0]                        # one GPU. [] = CPU (very slow). [0,1,2,3] = 4 GPUs (DDP)
+seed: 1234                           # irrelevant for a sequential test pass, but pin it anyway
+dump_path: './outputs/'              # .npy outputs land here, inside the hydra run directory
+
+# ---------------------------------------------------------------- the tasks, in order
+tasks:
+  restore_state:
+    weight_file: /workspace/work/best/e_3mom/RegressionEngine_ResNet_BEST.pth
+  evaluate:
+    report_interval: 10              # print progress every 10 batches
+    loss:                            # the loss used at training time, for a comparable number
+      _target_: watchmal.loss.relative_huber.RelativeHuberLoss
+      delta: 0.01
+      eps: 100
+    data_loaders:
+      test:
+        batch_size: 64
+        num_workers: 4
+
+# ---------------------------------------------------------------- your data
+data:
+  # npz with a `test_idxs` array = the indices of the events to run on.
+  split_path: /workspace/work/index_lists/TOT_infer_e.npz     # <<<<<< EDIT ME
+  dataset:
+    _target_: watchmal.dataset.cnn.MR_cnn_dataset.MRSegDataset
+    file_pattern: /workspace/work/data/**.h5           # <<<<<< EDIT ME
+    # These two come with the models - do not substitute another geometry.
+    geometry_file: /workspace/work/geometry/HK_HybridmPMT_WithOD_Realistic_geo_dump.npz
+    pmt_positions_file: /workspace/work/geometry/HK_HybridmPMT_WithOD_Realistic_mapping_squashed.npz
+    one_indexed: True # In input files from Mathias, PMT IDs begin from 1. 
+    channel_scale_offset:
+      time: 950
+    channel_scale_factor:
+      positions: 10000
+      time: 100
+      charge: 10
+    use_positions: True
+    use_padding: false
+    use_median_unhit_times: true
+    transforms:
+      - double_cover
+    label_set: [22, 11, 13, 111]
+
+hydra:
+  run:
+    dir: ./outputs/${hydra.job.config_name}/${now:%Y-%m-%d}_${now:%H-%M-%S.%f}
+  job:
+    chdir: True

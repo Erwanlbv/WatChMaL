@@ -1,5 +1,5 @@
-"""Checks for the ring-segmented loader (analysis/load_seg_h5_data.py) and the 2D displays
-(analysis/plotting_2d.py), on a small synthetic event/ring file."""
+"""Checks for the ring-segmented loader (analysis/load_seg_h5_data.py) and the segmentation
+event display (analysis/seg_display.py), on a small synthetic event/ring file."""
 import h5py
 import numpy as np
 import pytest
@@ -94,51 +94,6 @@ def test_truth_and_predictions(seg_file):
     assert data.ring_pred_directions[1] is None
 
 
-def test_wall_point():
-    from analysis.plotting_2d import _wall_point
-    np.testing.assert_allclose(_wall_point([0, 0, 0], [1, 0, 0], 10, 10), [10, 0, 0])
-    np.testing.assert_allclose(_wall_point([0, 0, 5], [0, 0, 1], 10, 10), [0, 0, 10])
-    np.testing.assert_allclose(_wall_point([0, 0, 0], [0.6, 0, 0.8], 10, 10), [7.5, 0, 10])
-
-
-def test_log_values_handles_non_positive():
-    from analysis.plotting_2d import _log_values
-    v, label, shift = _log_values(np.array([-2.0, 0.0, 8.0]), "time [ns]")
-    assert np.isfinite(v).all() and shift == 3.0 and "+ 3" in label
-
-
-@pytest.mark.parametrize("log", [False, True])
-def test_figures_build(seg_file, geometry, log):
-    pytest.importorskip("plotly")
-    from analysis import plotting_2d as p2
-    geo, mapping = geometry
-    data = LoadSegData(seg_file, n_pmts=N_PMTS)
-    fig = p2.plot_2d_original_vs_segmented(data, 0, mapping, "time", log=log, geo_file_path=geo)
-    assert len(fig.layout.annotations) == 3                      # whole event + 2 rings
-    names = {t.name for t in fig.data if t.name}
-    assert any(n.startswith("true dir. ring 1") for n in names)
-    assert any(n.startswith("pred. dir. ring 0") for n in names)
-    p2.plot_2d_event(data, 0, mapping, ring=1, log=log, geo_file_path=geo)
-    p2.plot_2d_ring_ownership(data, 0, mapping, geo_file_path=geo)
-    p2.plot_hit_histograms(data, 0, log_x=log, log_y=log)
-
-
-def test_image_coordinates_follow_prouse_convention(geometry):
-    """x = image column, y = image row, as CNNEventDisplay.plot_data_2d."""
-    from analysis.plotting_2d import load_image_mapping
-    _, mapping = geometry
-    rc = np.load(mapping)["pmt_image_positions"]
-    np.testing.assert_array_equal(load_image_mapping(mapping), rc[:, [1, 0]])
-
-
-def test_wall_point_outside_or_behind_is_none():
-    """Audit 2026-11-20: a vertex outside the PMT cylinder gave a point 16 m above the tank."""
-    from analysis.plotting_2d import _wall_point
-    assert _wall_point([0, 0, 3326], [0, 0.2, 0.98], 3243, 3296) is None
-    assert _wall_point([4000, 0, 0], [1, 0, 0], 3243, 3296) is None
-    assert _wall_point([0, 0, 0], [np.nan, 0, 0], 10, 10) is None
-
-
 def test_same_ring_duplicate_is_not_shared(tmp_path):
     """Audit 2026-11-20: a (PMT, time) pair repeated in ONE ring was counted as a 2-ring PMT."""
     path = tmp_path / "dup.h5"
@@ -149,22 +104,43 @@ def test_same_ring_duplicate_is_not_shared(tmp_path):
     assert data.hit_n_rings.max() == 1
 
 
-def test_cli_never_overwrites_input(tmp_path, geometry, monkeypatch):
-    """Audit 2026-11-20: an input not ending in .h5 was overwritten by the HTML."""
-    pytest.importorskip("plotly")
-    from analysis.seg_event_display import main
+def test_cnn_image_places_and_aggregates(geometry):
+    """Pixel = mapping[pmt]; a PMT hit twice gets the summed charge and the earliest time."""
+    from analysis.seg_display import cnn_image, load_mapping, pmt_mask
     _, mapping = geometry
-    src = tmp_path / "seg.hdf5"
-    with h5py.File(src, "w") as f:
-        _ring(f.create_group("event_000000"), "ring_0", [0, 3], [1.0, 2.0], [5.0, 7.0])
-    before = src.read_bytes()
-    monkeypatch.chdir(tmp_path)
-    main([str(src), "--mapping", mapping, "--tube-id-base", "0", "--views", "single"])
-    assert src.read_bytes() == before and (tmp_path / "seg_ev0.html").exists()
+    rc, shape = load_mapping(mapping)
+    assert shape == (5, 4) and pmt_mask(rc, shape).all()
+    q, t = cnn_image(np.array([7, 7, 2]), np.array([1.0, 2.0, 5.0]), np.array([30.0, 10.0, 4.0]), rc, shape)
+    assert q[rc[7, 0], rc[7, 1]] == 3.0 and t[rc[7, 0], rc[7, 1]] == 10.0
+    assert q[rc[2, 0], rc[2, 1]] == 5.0
+    assert np.isfinite(q).sum() == 2
 
 
-def test_log_colorbar_nan_safe():
-    from analysis.plotting_2d import _log_colorbar
-    assert "tickvals" not in _log_colorbar(np.nan, np.nan, "q", 0.0)
-    cb = _log_colorbar(0.3, 0.3, "q", 0.0)
-    assert len(cb["tickvals"]) == len(set(cb["tickvals"]))
+def test_to_rgba_theme_colours():
+    from analysis.seg_display import THEMES, to_rgba
+    lut = np.stack([np.arange(256)] * 3 + [np.full(256, 255)], axis=1).astype(np.uint8)
+    values = np.array([[np.nan, np.nan, 1.0, 3.0]])
+    mask = np.array([[False, True, True, True]])
+    for name, th in THEMES.items():
+        rgba = to_rgba(values, mask, (1.0, 3.0), lut, th)
+        assert rgba[0, 0, 3] == 0                                   # no PMT: transparent
+        assert tuple(rgba[0, 1, :3]) == th["unhit"]                 # unhit PMT: theme colour
+        assert rgba[0, 2, 0] == 0 and rgba[0, 3, 0] == 255          # ends of the colour map
+
+
+def test_window_smoke(seg_file, geometry, monkeypatch):
+    """The window builds, navigates and switches metric, log and theme (offscreen Qt)."""
+    pytest.importorskip("pyqtgraph")
+    pytest.importorskip("PyQt6")
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    from analysis.seg_display import run
+    _, mapping = geometry
+    data = LoadSegData(seg_file, n_pmts=N_PMTS)
+    app, win = run(data, mapping, event=0, theme="dark")
+    assert len(win.panels) == 3                                     # whole event + 2 rings
+    win.set_metric("time")
+    win.toggle_log()
+    win.toggle_theme()
+    win.go(1)
+    assert win.i == 1 and len(win.panels) == 2 and win.theme == "light"
+    win.close()

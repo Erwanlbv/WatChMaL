@@ -4,17 +4,18 @@ Segmentation event display: the ResNet's view (CNN image), whole event and rings
     python -m analysis.seg_display FILE.h5 --mapping MAPPING.npz [--truth WCSIM.h5] [--event N]
                                    [--view all|true|reco|custom] [--light]
 
-One window (PyQt6 + pyqtgraph, not in requirements.txt: `pip install PyQt6 pyqtgraph`). Each panel is the CNN image of N. Prouse's event display
-(`pmt_image_positions`: one pixel per PMT, row 0 at the bottom). Without --truth the first
-panel is the whole event rebuilt as the sum of the rings, and the next panels are the rings. All
-panels share one colour scale. The values are the raw charge / time of the file: no
-dataset transform or normalisation is applied. The colour scale starts in log10, as the
-LogNorm default of N. Prouse's display.
+Create one window (PyQt6 + pyqtgraph backend, run `pip install PyQt6 pyqtgraph` if necessary). 
+Each panel is the CNN image event display
+
+Without --truth the first panel is the whole event rebuilt as the sum of the rings, and the next panels are the rings. 
+All panels share one colour scale. The values are the raw charge / time of the file: no dataset transform or normalisation 
+is applied. The colour scale starts in log10.
 
 With --truth (the WCSim file of the `src_file` attribute; the segmented file itself holds
-only the predicted rings), the first panel is the real unsegmented event, the first row adds
-one panel per true particle (its digitized hits, `primary_track_id`), and the second row
-holds the reco rings, each under the true particle it is matched to.
+only the predicted rings - see the dedicated part for more details), the first panel is the 
+real unsegmented event, the first row adds one panel per true particle (its digitized hits, 
+`primary_track_id`), and the second row holds the reco rings, each under the true particle it 
+is matched to.
 
 Views:  All (everything)   True (event + true particles)   Reco (event + rings)
         Custom (one toggle per panel, to keep or hide it). Double-clicking a panel shows it
@@ -43,7 +44,7 @@ THEMES = {
 PDG_SYMBOLS = {11: "e⁻", -11: "e⁺", 13: "μ⁻", -13: "μ⁺", 22: "γ", 111: "π⁰", 211: "π⁺", -211: "π⁻"}
 
 
-# ── pure numpy part (tested without Qt) ──────────────────────────────────────────────────
+# ── pure numpy part  ──────────────────────────────────────────────────
 
 def load_mapping(mapping_file_path):
     """(n_pmts, 2) int array of (row, column) per 0-based PMT id, and the image shape."""
@@ -118,7 +119,7 @@ def short_name(key, title):
     return f"Ring {key[1]}"
 
 
-# ── panel layout (tested without Qt) ─────────────────────────────────────────────────────
+# ── panel layout ─────────────────────────────────────────────────────
 
 MODES = ("all", "true", "reco", "custom")
 

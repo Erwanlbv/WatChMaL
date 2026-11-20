@@ -4,8 +4,8 @@ Loader for ring-segmented HDF5 files (one group per event, one sub-group per rin
 This is the counterpart of `analysis.load_h5_data.LoadData` for the hierarchical
 `event/ring` layout written by the multi-ring segmentation chain (Mathias' RingSegmentor,
 `format='segmented_events_v2'`) and by Z. Hu's `Root2h5*.py` converters. It exposes the
-same `load_hit_info` interface, so the 2D displays of `analysis.plotting_2d` accept
-either loader.
+same `load_hit_info` interface (plus `ring=`), and reads the per-PMT truth from the WCSim
+file the events come from (`truth_path`). Used by `analysis.seg_display`.
 """
 import warnings
 

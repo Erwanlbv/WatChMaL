@@ -4,7 +4,7 @@ Segmentation event display: the ResNet's view (CNN image), whole event and rings
     python -m analysis.seg_display FILE.h5 --mapping MAPPING.npz [--truth WCSIM.h5] [--event N]
                                    [--view all|true|reco|custom] [--light]
 
-One window (PyQt6 + pyqtgraph). Each panel is the CNN image of N. Prouse's event display
+One window (PyQt6 + pyqtgraph, not in requirements.txt: `pip install PyQt6 pyqtgraph`). Each panel is the CNN image of N. Prouse's event display
 (`pmt_image_positions`: one pixel per PMT, row 0 at the bottom). Without --truth the first
 panel is the whole event rebuilt as the sum of the rings, and the next panels are the rings. All
 panels share one colour scale. The values are the raw charge / time of the file: no
@@ -174,8 +174,12 @@ def compact(pos, keys):
 # ── Qt window ────────────────────────────────────────────────────────────────────────────
 
 def run(data, mapping_file_path, event=0, theme=None, mode="all"):
-    import pyqtgraph as pg
-    from PyQt6.QtCore import Qt
+    try:
+        import pyqtgraph as pg
+        from PyQt6.QtCore import Qt
+    except ImportError as err:
+        raise ImportError(f"the segmentation display needs PyQt6 and pyqtgraph ({err}): "
+                          f"pip install PyQt6 pyqtgraph") from err
     from PyQt6.QtGui import QKeySequence, QShortcut
     from PyQt6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout, QLabel, QMainWindow,
                                  QPushButton, QSpinBox, QVBoxLayout, QWidget)

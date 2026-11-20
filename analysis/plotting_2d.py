@@ -36,7 +36,8 @@ def _metric(data, pmt_metric):
 
 def _log_values(values, label):
     """log10 of the values for the colour scale. Non-positive values are shifted, and the label says so."""
-    vmin = np.nanmin(values) if values.size else 1.0
+    finite = values[np.isfinite(values)]
+    vmin = finite.min() if finite.size else 1.0
     if vmin > 0:
         return np.log10(values), label, 0.0
     shift = 1.0 - vmin
@@ -45,6 +46,8 @@ def _log_values(values, label):
 
 def _log_colorbar(lo, hi, label, shift):
     """Colourbar ticks at 1-2-5 decades, labelled with the real (unshifted) values."""
+    if not (np.isfinite(lo) and np.isfinite(hi)):
+        return dict(title=f"{label} (log)")
     ticks = []
     for d in range(int(np.floor(lo)) - 1, int(np.ceil(hi)) + 1):
         for m in (1, 2, 5):
@@ -52,7 +55,7 @@ def _log_colorbar(lo, hi, label, shift):
             if lo - 1e-9 <= v <= hi + 1e-9:
                 ticks.append(v)
     if len(ticks) < 2:
-        ticks = list(np.linspace(lo, hi, 4))
+        ticks = list(np.unique(np.linspace(lo, hi, 4)))
     text = [f"{10 ** v - shift:.3g}" for v in ticks]
     return dict(title=f"{label} (log)", tickvals=ticks, ticktext=text)
 
@@ -75,6 +78,8 @@ def _wall_point(vertex, direction, radius, half_height):
     """Point where the ray vertex + s*direction (s > 0) leaves the cylinder (axis z)."""
     x, y, z = vertex
     dx, dy, dz = direction
+    if x * x + y * y > radius * radius or abs(z) > half_height or not np.all(np.isfinite(direction)):
+        return None      # vertex outside the PMT cylinder: no meaningful exit point
     s = np.inf
     a = dx * dx + dy * dy
     if a > 0:
@@ -87,7 +92,7 @@ def _wall_point(vertex, direction, radius, half_height):
         s_cap = ((half_height if dz > 0 else -half_height) - z) / dz
         if s_cap > 0:
             s = min(s, s_cap)
-    return None if not np.isfinite(s) else np.asarray(vertex) + s * np.asarray(direction)
+    return None if not (np.isfinite(s) and s >= 0) else np.asarray(vertex) + s * np.asarray(direction)
 
 
 def _tracks(data, event_idx, ring):
@@ -117,6 +122,8 @@ def _track_markers(data, event_idx, ring, geo_file_path, image_xy):
     for name, vertex, direction, color, symbol in _tracks(data, event_idx, ring):
         p = _wall_point(vertex, direction, radius, half_height)
         if p is None:
+            print(f"[plotting_2d] event {event_idx}: no marker for '{name}' (vertex {np.round(vertex, 1)} "
+                  f"outside the PMT cylinder R={radius:.0f}, H/2={half_height:.0f})")
             continue
         nearest = int(np.argmin(np.sum((geo - p) ** 2, axis=1)))
         markers.append((name, image_xy[nearest], color, symbol))
@@ -246,10 +253,10 @@ def plot_2d_original_vs_segmented(data, event_idx, mapping_file_path, pmt_metric
     if log:
         _, label_log, shift = _log_values(allv, label)
         vals = [np.log10(v + shift) for v in vals]
-        lo, hi = np.log10(allv + shift).min(), np.log10(allv + shift).max()
+        lo, hi = np.nanmin(np.log10(allv + shift)), np.nanmax(np.log10(allv + shift))
         cbar = _log_colorbar(lo, hi, label_log, shift)
     else:
-        lo, hi = allv.min(), allv.max()
+        lo, hi = np.nanmin(allv), np.nanmax(allv)
     titles = ["whole event (sum of rings)"] + [data.ring_title(event_idx, r) for r in range(n)]
     fig = make_subplots(rows=1, cols=len(panels), subplot_titles=titles, horizontal_spacing=0.01)
     for i, r in enumerate(panels):

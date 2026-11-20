@@ -58,7 +58,8 @@ class LoadSegData():
     ring_names : list of list of str
         Ring group names of each event.
     positions : np.ndarray, shape (n_events, 3)
-        True vertex [cm] (taken from ring 0; all rings of an event share it).
+        True vertex [cm] (taken from ring 0; all rings of an event share it). NaN for an event
+        with no ring (none passed the segmentation threshold).
     ring_labels, ring_energies : list of np.ndarray, shape (n_rings,)
         PDG code and true total energy [MeV] of the particle matched to each ring.
     ring_directions : list of np.ndarray, shape (n_rings, 3)
@@ -82,7 +83,14 @@ class LoadSegData():
     hit_dominant_ring : np.ndarray of int, shape (n_hits,)
         Index of the ring holding the largest share of each PMT's charge.
     loaded_event_idx, loaded_ring : int, int or None
-        What load_hit_info last loaded.
+        What load_hit_info last loaded. The plotting functions call load_hit_info, so they
+        change these and the hit_* attributes.
+
+    Notes
+    -----
+    In the union, hits are merged on (PMT, time): a (PMT, time) pair repeated inside one ring
+    (seen once in Root2h5 files) is merged too, so the union can hold one hit fewer than the
+    ring alone.
 
     Example
     -------
@@ -95,6 +103,7 @@ class LoadSegData():
     def __init__(self, h5path, tube_id_base=None, n_pmts=DEFAULT_N_PMTS):
         self.h5path = h5path
         self.n_pmts = n_pmts
+        self._warned = set()
         with h5py.File(h5path, "r") as f:
             self.file_attrs = dict(f.attrs)
             self.event_names = sorted(k for k in f if k.startswith("event_"))
@@ -216,10 +225,13 @@ class LoadSegData():
         q = np.zeros(pmt.size)
         np.add.at(q, inv, q_all)
         n_multi = pmt.size - np.unique(pmt).size
-        if n_multi:
+        if n_multi and event_idx not in self._warned:
+            self._warned.add(event_idx)
             warnings.warn(f"[LoadSegData] event {event_idx}: {n_multi} PMTs carry several hits at different "
                           f"times (several triggers); they are kept as separate hits")
-        n_rings = np.bincount(inv, minlength=pmt.size)
+        # number of DISTINCT rings holding each hit (a (PMT, time) pair repeated inside one ring counts once)
+        hit_ring = np.unique(np.stack([inv, ring_all], axis=1), axis=0)
+        n_rings = np.bincount(hit_ring[:, 0], minlength=pmt.size)
         # dominant ring: ring with the largest charge share for each PMT
         best_q = np.full(pmt.size, -np.inf)
         dom = np.full(pmt.size, -1)

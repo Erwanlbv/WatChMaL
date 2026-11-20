@@ -13,6 +13,7 @@ FILE.h5 may be a ring-segmented file (event_XXXXXX/ring_K groups) or a flat WatC
     hist       charge and time histograms
 """
 import argparse
+import os
 
 import h5py
 
@@ -65,7 +66,9 @@ def main(argv=None):
             figs.append(p2.plot_hit_histograms(data, a.event, a.hist_log_x, a.hist_log_y))
         else:
             raise SystemExit(f"{tag} unknown view {v!r}")
-    out = a.output or a.h5file.rsplit("/", 1)[-1].replace(".h5", f"_ev{a.event}.html")
+    out = a.output or os.path.splitext(os.path.basename(a.h5file))[0] + f"_ev{a.event}.html"
+    if os.path.abspath(out) == os.path.abspath(a.h5file):
+        raise SystemExit(f"{tag} refusing to overwrite the input file {a.h5file}")
     with open(out, "w") as fh:
         fh.write("<html><head><meta charset='utf-8'></head><body>\n")
         for i, fig in enumerate(figs):

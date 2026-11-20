@@ -129,3 +129,42 @@ def test_image_coordinates_follow_prouse_convention(geometry):
     _, mapping = geometry
     rc = np.load(mapping)["pmt_image_positions"]
     np.testing.assert_array_equal(load_image_mapping(mapping), rc[:, [1, 0]])
+
+
+def test_wall_point_outside_or_behind_is_none():
+    """Audit 2026-11-20: a vertex outside the PMT cylinder gave a point 16 m above the tank."""
+    from analysis.plotting_2d import _wall_point
+    assert _wall_point([0, 0, 3326], [0, 0.2, 0.98], 3243, 3296) is None
+    assert _wall_point([4000, 0, 0], [1, 0, 0], 3243, 3296) is None
+    assert _wall_point([0, 0, 0], [np.nan, 0, 0], 10, 10) is None
+
+
+def test_same_ring_duplicate_is_not_shared(tmp_path):
+    """Audit 2026-11-20: a (PMT, time) pair repeated in ONE ring was counted as a 2-ring PMT."""
+    path = tmp_path / "dup.h5"
+    with h5py.File(path, "w") as f:
+        _ring(f.create_group("event_000000"), "ring_0", [0, 3, 3], [1.0, 1.0, 1.0], [5.0, 7.0, 7.0])
+    data = LoadSegData(str(path), n_pmts=N_PMTS)
+    data.load_hit_info(0)
+    assert data.hit_n_rings.max() == 1
+
+
+def test_cli_never_overwrites_input(tmp_path, geometry, monkeypatch):
+    """Audit 2026-11-20: an input not ending in .h5 was overwritten by the HTML."""
+    pytest.importorskip("plotly")
+    from analysis.seg_event_display import main
+    _, mapping = geometry
+    src = tmp_path / "seg.hdf5"
+    with h5py.File(src, "w") as f:
+        _ring(f.create_group("event_000000"), "ring_0", [0, 3], [1.0, 2.0], [5.0, 7.0])
+    before = src.read_bytes()
+    monkeypatch.chdir(tmp_path)
+    main([str(src), "--mapping", mapping, "--tube-id-base", "0", "--views", "single"])
+    assert src.read_bytes() == before and (tmp_path / "seg_ev0.html").exists()
+
+
+def test_log_colorbar_nan_safe():
+    from analysis.plotting_2d import _log_colorbar
+    assert "tickvals" not in _log_colorbar(np.nan, np.nan, "q", 0.0)
+    cb = _log_colorbar(0.3, 0.3, "q", 0.0)
+    assert len(cb["tickvals"]) == len(set(cb["tickvals"]))

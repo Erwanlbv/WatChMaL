@@ -54,17 +54,34 @@ PART_DT = np.dtype([("track_id", "<i4"), ("parent_id", "<i4"), ("pdg", "<i4"), (
 @pytest.fixture
 def wcsim_file(tmp_path):
     """The WCSim h5 behind seg_file (tube_id 1-based). Event 0: track 1 (e-) and 2 (mu-), one
-    dark-noise hit and one hit in no ring. Event 1: the hits of its single ring, track 1."""
-    hits0 = [(1, 10, 1.0, 1), (2, 11, 2.0, 2), (3, 12, 2.0, 1), (4, 20, 3.0, 1), (N_PMTS, 21, 1.0, 1),
+    dark-noise hit and one hit in no ring; the hit on PMT 3 has 3 photons (track 1, 2, 2) but
+    WCSim labels it with its first photon (track 1). Event 1: its single ring, track 1."""
+    hits0 = [(1, 10, 1.0, 1), (2, 11, 2.0, 2), (3, 12, 3.0, 1), (4, 20, 3.0, 1), (N_PMTS, 21, 1.0, 1),
              (7, 30, 0.5, -1), (8, 40, 4.0, 2)]
+    photons0 = [[1], [2], [1, 2, 2], [1], [1], [-1], [2]]
     hits1 = [(5, 10, 1.0, 1), (5, 1200, 2.0, 1), (6, 11, 1.0, 1)]
+    photons1 = [[1], [1], [1]]
     rows = [(t, tm, q, 0, 0, 0, p, p) for t, tm, q, p in hits0 + hits1]
+    ph_rows, ph_ids, ph_index, hit_index = [], [], [0], [0]
+    for photons in (photons0, photons1):
+        local = 0
+        for prims in photons:
+            for pr in prims:
+                ph_rows.append((0, 0, 1, 0, 0, 0, pr, pr))
+                ph_ids.append(local)
+                local += 1
+            ph_index.append(len(ph_ids))
+        hit_index.append(len(ph_rows))
     parts = [(1, 0, 11, 300.0), (2, 0, 13, 500.0), (5, 1, 22, 1.0), (1, 0, 13, 400.0)]
     path = tmp_path / "wcsim.h5"
     with h5py.File(path, "w") as f:
         ev = f.create_group("events")
         ev["digi_hits"] = np.array(rows, dtype=HIT_DT)
         ev["digi_hit_index"] = np.array([0, len(hits0), len(hits0) + len(hits1)], dtype=np.int64)
+        ev["hits"] = np.array(ph_rows, dtype=HIT_DT)
+        ev["hit_index"] = np.array(hit_index, dtype=np.int64)
+        ev["digi_photon_ids"] = np.array(ph_ids, dtype=np.int32)
+        ev["digi_photon_index"] = np.array(ph_index, dtype=np.int64)
         ev["particles"] = np.array(parts, dtype=PART_DT)
         ev["particle_index"] = np.array([0, 3, 4], dtype=np.int64)
     return str(path)
@@ -136,12 +153,17 @@ def test_same_ring_duplicate_is_not_shared(tmp_path):
 def test_truth_per_particle(seg_file, wcsim_file):
     data = LoadSegData(seg_file, n_pmts=N_PMTS, truth_path=wcsim_file)
     tp = data.true_parents(0)
-    assert [(p["track_id"], p["pdg"], p["pe"], p["ring"]) for p in tp] == [(1, 11, 7.0, 1), (2, 13, 6.0, 0)]
+    # PMT 3 (3 p.e., photons 1, 2, 2) is split 1 / 2 p.e.; WCSim's first-photon label gives it all to track 1
+    assert [(p["track_id"], p["pdg"], p["ring"]) for p in tp] == [(1, 11, 1), (2, 13, 0)]
+    assert np.allclose([p["pe"] for p in tp], [6.0, 8.0])
+    assert np.allclose([p["pe_first_photon"] for p in tp], [8.0, 6.0])
     assert data.noise_pe(0) == 0.5
     data.load_true_hit_info(0)                       # the real event: noise and the no-ring hit included
-    assert data.hit_pmt.size == 7 and np.isclose(data.hit_charge.sum(), 13.5)
-    data.load_true_hit_info(0, track_id=2)
-    assert sorted(data.hit_pmt.tolist()) == [1, 7]  # 0-based
+    assert data.hit_pmt.size == 7 and np.isclose(data.hit_charge.sum(), 14.5)
+    data.load_true_hit_info(0, track_id=2)           # the shared PMT appears in both particles
+    assert sorted(data.hit_pmt.tolist()) == [1, 2, 7] and np.isclose(data.hit_charge.sum(), 8.0)
+    data.load_true_hit_info(0, track_id=2, split=False)
+    assert sorted(data.hit_pmt.tolist()) == [1, 7]
     assert data.true_parents(1)[0]["pdg"] == 13
 
 

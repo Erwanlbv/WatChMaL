@@ -167,7 +167,9 @@ class LoadSegData():
     def true_parents(self, event_idx):
         """
         True particles of one event, from the WCSim file: list of dicts with track_id, pdg,
-        energy [MeV], pe (true charge of its digitized hits) and ring (index of the ring matched
+        energy [MeV], pe (its share of the digitized charge, split by photons), pe_first_photon
+        (the same with WCSim's first-photon label: this is the `true_parent_pe` of the segmented
+        files) and ring (index of the ring matched
         to it by the segmentation, `matched_parent_track_id`, or None). Empty without truth, or
         when the WCSim event does not hold the hits of the rings (wrong truth file).
         """
@@ -200,28 +202,49 @@ class LoadSegData():
             if "matched_parent_track_id" in a:
                 matched.setdefault(int(a["matched_parent_track_id"]), k)
         part = self.truth.particles(src)
+        srow, sprim, frac = self._split(event_idx, src)
         out = []
-        for tid in np.unique(h["primary"][h["primary"] > 0]):
+        for tid in np.unique(sprim[sprim > 0]):
             row = part[(part["track_id"] == tid) & (part["parent_id"] == 0)]
             out.append(dict(track_id=int(tid),
                             pdg=int(row["pdg"][0]) if row.size else 0,
                             energy=float(row["energy_mev"][0]) if row.size else float("nan"),
-                            pe=float(h["charge"][h["primary"] == tid].sum()),
+                            pe=float((h["charge"][srow] * frac)[sprim == tid].sum()),
+                            pe_first_photon=float(h["charge"][h["primary"] == tid].sum()),
                             ring=matched.get(int(tid))))
         return out
 
-    def load_true_hit_info(self, event_idx, track_id=None):
+    def _split(self, event_idx, src):
+        key = ("split", event_idx)
+        if key not in self._truth_cache:
+            self._truth_cache[key] = self.truth.photon_split(src)
+        return self._truth_cache[key]
+
+    def load_true_hit_info(self, event_idx, track_id=None, split=True):
         """
         Digitized hits of the WCSim event behind `event_idx`: all of them (track_id None: the
-        real unsegmented event, dark noise included) or those whose photons come from one true
-        primary (`primary_track_id == track_id`). Sets the same hit_* attributes as load_hit_info.
+        real unsegmented event, dark noise included) or the part of them due to one true primary.
+        Sets the same hit_* attributes as load_hit_info.
+
+        split=True (default): a hit is shared between the primaries of its photons, each getting
+        the charge times its photon fraction, so a PMT on two overlapping rings appears in both.
+        split=False: WCSim's per-hit label `digi_hits.primary_track_id` (first photon only), the
+        whole hit to one primary - shared regions are then missing from all but one particle.
         """
         if not self.has_truth:
             raise RuntimeError("no truth file: pass truth_path= (the WCSim h5 of the src_file attribute)")
         src = self.src_events[event_idx] if self.src_events[event_idx] is not None else event_idx
         h = self.truth.digi_hits(src)
-        sel = slice(None) if track_id is None else h["primary"] == track_id
-        self.hit_pmt, self.hit_time, self.hit_charge = h["pmt"][sel], h["time"][sel], h["charge"][sel]
+        if track_id is None:
+            self.hit_pmt, self.hit_time, self.hit_charge = h["pmt"], h["time"], h["charge"]
+        elif split:
+            row, prim, frac = self._split(event_idx, src)
+            sel = prim == track_id
+            r = row[sel]
+            self.hit_pmt, self.hit_time, self.hit_charge = h["pmt"][r], h["time"][r], h["charge"][r] * frac[sel]
+        else:
+            sel = h["primary"] == track_id
+            self.hit_pmt, self.hit_time, self.hit_charge = h["pmt"][sel], h["time"][sel], h["charge"][sel]
         self.hit_n_rings = self.hit_dominant_ring = np.full(self.hit_pmt.size, -1, dtype=int)
         self.loaded_event_idx, self.loaded_ring = event_idx, None
 
@@ -326,7 +349,8 @@ class LoadSegData():
             return None
         src = self.src_events[event_idx] if self.src_events[event_idx] is not None else event_idx
         h = self.truth.digi_hits(src)
-        return float(h["charge"][h["primary"] < 0].sum())
+        row, prim, frac = self._split(event_idx, src)
+        return float((h["charge"][row] * frac)[prim < 0].sum())
 
     def ring_title(self, event_idx, ring):
         """Short description of one ring, for panel titles."""
@@ -353,6 +377,8 @@ class WCSimTruth():
             ev = f["events"]
             self.hit_index = ev["digi_hit_index"][()]
             self.particle_index = ev["particle_index"][()]
+            self.photon_hit_index = ev["hit_index"][()]                 # photons (true hits) per event
+            self.digi_photon_index = ev["digi_photon_index"][()]       # photons of each digitized hit
         print(f"[WCSimTruth] {path}: {len(self)} events, {self.hit_index[-1]} digitized hits")
 
     def __len__(self):
@@ -367,6 +393,29 @@ class WCSimTruth():
             raise ValueError(f"{self.path} event {src_event}: tube_id out of [1, {self.n_pmts}]")
         return dict(pmt=pmt, time=h["time_ns"].astype(float), charge=h["charge_pe"].astype(float),
                     primary=h["primary_track_id"].astype(int))
+
+    def photon_split(self, src_event):
+        """
+        Share of each digitized hit coming from each true primary, from its photons
+        (`digi_photon_ids` -> `hits.primary_track_id`). Returns (digi_row, primary, fraction):
+        one entry per (digitized hit, primary) pair, digi_row local to the event, fractions
+        summing to 1 per hit (photon counts; -1 = dark-noise photons).
+
+        `digi_hits.primary_track_id` is the primary of the FIRST photon only, so a PMT hit by
+        two particles goes entirely to one of them (measured on batch_0000: 14% of the digitized
+        hits mix primaries, carrying 42% of the charge).
+        """
+        a, b = self.hit_index[src_event], self.hit_index[src_event + 1]
+        pa, pb = self.digi_photon_index[a], self.digi_photon_index[b]
+        with h5py.File(self.path, "r") as f:
+            ev = f["events"]
+            ids = ev["digi_photon_ids"][pa:pb]                              # local to the event's photons
+            h0, h1 = self.photon_hit_index[src_event], self.photon_hit_index[src_event + 1]
+            prim = ev["hits"].fields("primary_track_id")[h0:h1]
+        n_ph = np.diff(self.digi_photon_index[a:b + 1])
+        digi = np.repeat(np.arange(b - a), n_ph)
+        pairs, counts = np.unique(np.stack([digi, prim[ids]], axis=1), axis=0, return_counts=True)
+        return pairs[:, 0], pairs[:, 1], counts / n_ph[pairs[:, 0]]
 
     def particles(self, src_event):
         a, b = self.particle_index[src_event], self.particle_index[src_event + 1]

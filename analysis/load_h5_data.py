@@ -2,6 +2,21 @@ from watchmal.utils.math import  direction_from_angles, momentum_from_energy
 import numpy as np
 import h5py as h5
 
+# PDG code -> WatChMaL label (0 gamma, 1 electron, 2 muon, 3 pi0)
+PDG_TO_WATCHMAL = {22: 0, 11: 1, -11: 1, 13: 2, -13: 2, 111: 3}
+
+
+def to_watchmal_labels(labels):
+    """WatChMaL labels 0-3 unchanged; PDG codes (e.g. HKFD_Dec2025 files) mapped through PDG_TO_WATCHMAL."""
+    labels = np.asarray(labels)
+    if labels.size == 0 or np.isin(labels, (0, 1, 2, 3)).all():
+        return labels
+    unknown = np.setdiff1d(np.unique(labels), list(PDG_TO_WATCHMAL))
+    if unknown.size:
+        raise ValueError(f"labels are neither WatChMaL 0-3 nor known PDG codes: {unknown.tolist()}")
+    return np.vectorize(PDG_TO_WATCHMAL.get, otypes=[int])(labels)
+
+
 class LoadData():
     """
     Load the truth information of a WatChMaL h5 dataset into numpy arrays.
@@ -41,7 +56,8 @@ class LoadData():
     energies : np.ndarray, shape (n_events,)
         True total energy of the particle [MeV].
     labels : np.ndarray of int, shape (n_events,)
-        Particle type label (0: gamma, 1: electron, 2: muon, 3: pi0).
+        Particle type label (0: gamma, 1: electron, 2: muon, 3: pi0). Files storing PDG
+        codes (22, +-11, +-13, 111) are converted on reading.
     momenta : np.ndarray, shape (n_events,)
         True momentum [MeV], calculated from `energies` and the particle mass
         given by `labels`.
@@ -111,7 +127,7 @@ class LoadData():
             
         with h5.File(h5path) as h5file:
             self.energies       = np.array(h5file['energies'])[self.idxs].squeeze()
-            self.labels         = np.array(h5file['labels'])[self.idxs].squeeze()
+            self.labels         = to_watchmal_labels(np.array(h5file['labels'])[self.idxs].squeeze())
             self.momenta        = momentum_from_energy(self.energies, self.labels)
             self.positions      = np.array(h5file['positions'])[self.idxs].squeeze()
             self.event_ids      = np.array(h5file['event_ids'])[self.idxs].squeeze()

@@ -48,6 +48,11 @@ class LoadSegData():
         0-based, an id equal to `n_pmts` means 1-based) and raises if neither is seen.
     n_pmts : int, optional
         Number of PMTs of the detector, used by the detection above. Default 19746 (HK FD).
+    truth_path : str, optional
+        The WCSim h5 the events come from (file attribute `src_file`, event attribute
+        `src_event`). The segmented files hold only the predicted rings (`write_true=False`);
+        this file holds the real unsegmented event and the true primary of every digitized hit,
+        read by `true_parents` and `load_true_hit_info`.
 
     Attributes
     ----------
@@ -100,7 +105,7 @@ class LoadSegData():
     >>> data.load_hit_info(3, ring=1)    # ring 1 only
     """
 
-    def __init__(self, h5path, tube_id_base=None, n_pmts=DEFAULT_N_PMTS):
+    def __init__(self, h5path, tube_id_base=None, n_pmts=DEFAULT_N_PMTS, truth_path=None):
         self.h5path = h5path
         self.n_pmts = n_pmts
         self._warned = set()
@@ -143,11 +148,82 @@ class LoadSegData():
                 self.ring_directions.append(np.array(dirs).reshape(-1, 3))
                 self.ring_pred_directions.append(np.array(pdirs) if len(pdirs) == len(rings) and rings else None)
                 self.ring_pred_pid.append(np.array(ppid) if len(ppid) == len(rings) and rings else None)
+            self.src_events = [int(f[n].attrs["src_event"]) if "src_event" in f[n].attrs else None
+                               for n in self.event_names]
         self.n_rings = np.array([len(r) for r in self.ring_names], dtype=int)
         self.positions = np.array(positions).reshape(-1, 3)
         self.tube_id_base = self._resolve_base(tube_id_base, seen_min, seen_max)
         print(f"[LoadSegData] {h5path}: {len(self.event_names)} events, rings/event "
               f"{dict(zip(*np.unique(self.n_rings, return_counts=True)))}, tube_id_base={self.tube_id_base}")
+        self.truth = WCSimTruth(truth_path, n_pmts) if truth_path else None
+        self._truth_cache = {}
+
+    # ── per-PMT truth, from the WCSim file the events come from ─────────────────────────
+
+    @property
+    def has_truth(self):
+        return self.truth is not None
+
+    def true_parents(self, event_idx):
+        """
+        True particles of one event, from the WCSim file: list of dicts with track_id, pdg,
+        energy [MeV], pe (true charge of its digitized hits) and ring (index of the ring matched
+        to it by the segmentation, `matched_parent_track_id`, or None). Empty without truth, or
+        when the WCSim event does not hold the hits of the rings (wrong truth file).
+        """
+        if not self.has_truth:
+            return []
+        if event_idx not in self._truth_cache:
+            self._truth_cache[event_idx] = self._build_truth(event_idx)
+        return self._truth_cache[event_idx]
+
+    def _build_truth(self, event_idx):
+        src = self.src_events[event_idx]
+        if src is None:
+            src = event_idx
+        if not 0 <= src < len(self.truth):
+            warnings.warn(f"[LoadSegData] event {event_idx}: src_event {src} not in {self.truth.path}")
+            return []
+        h = self.truth.digi_hits(src)
+        # consistency: every ring hit (PMT, time) must be a digitized hit of the WCSim event
+        if self.n_rings[event_idx]:
+            self.load_hit_info(event_idx)
+            ring_keys = {(int(p), int(round(t * 1000))) for p, t in zip(self.hit_pmt, self.hit_time)}
+            wc_keys = {(int(p), int(round(t * 1000))) for p, t in zip(h["pmt"], h["time"])}
+            found = len(ring_keys & wc_keys) / len(ring_keys)
+            if found < 0.99:
+                warnings.warn(f"[LoadSegData] event {event_idx}: only {found:.1%} of the ring hits are in WCSim "
+                              f"event {src} of {self.truth.path} - wrong truth file? Truth disabled for it.")
+                return []
+        matched = {}
+        for k, a in enumerate(self.ring_attrs[event_idx]):
+            if "matched_parent_track_id" in a:
+                matched.setdefault(int(a["matched_parent_track_id"]), k)
+        part = self.truth.particles(src)
+        out = []
+        for tid in np.unique(h["primary"][h["primary"] > 0]):
+            row = part[(part["track_id"] == tid) & (part["parent_id"] == 0)]
+            out.append(dict(track_id=int(tid),
+                            pdg=int(row["pdg"][0]) if row.size else 0,
+                            energy=float(row["energy_mev"][0]) if row.size else float("nan"),
+                            pe=float(h["charge"][h["primary"] == tid].sum()),
+                            ring=matched.get(int(tid))))
+        return out
+
+    def load_true_hit_info(self, event_idx, track_id=None):
+        """
+        Digitized hits of the WCSim event behind `event_idx`: all of them (track_id None: the
+        real unsegmented event, dark noise included) or those whose photons come from one true
+        primary (`primary_track_id == track_id`). Sets the same hit_* attributes as load_hit_info.
+        """
+        if not self.has_truth:
+            raise RuntimeError("no truth file: pass truth_path= (the WCSim h5 of the src_file attribute)")
+        src = self.src_events[event_idx] if self.src_events[event_idx] is not None else event_idx
+        h = self.truth.digi_hits(src)
+        sel = slice(None) if track_id is None else h["primary"] == track_id
+        self.hit_pmt, self.hit_time, self.hit_charge = h["pmt"][sel], h["time"][sel], h["charge"][sel]
+        self.hit_n_rings = self.hit_dominant_ring = np.full(self.hit_pmt.size, -1, dtype=int)
+        self.loaded_event_idx, self.loaded_ring = event_idx, None
 
     def _resolve_base(self, tube_id_base, seen_min, seen_max):
         if tube_id_base is not None:
@@ -244,6 +320,14 @@ class LoadSegData():
         self.hit_pmt, self.hit_time, self.hit_charge = pmt, t, q
         self.hit_n_rings, self.hit_dominant_ring = n_rings, dom
 
+    def noise_pe(self, event_idx):
+        """Charge of the dark-noise hits (primary_track_id = -1) of the WCSim event, or None."""
+        if not self.has_truth:
+            return None
+        src = self.src_events[event_idx] if self.src_events[event_idx] is not None else event_idx
+        h = self.truth.digi_hits(src)
+        return float(h["charge"][h["primary"] < 0].sum())
+
     def ring_title(self, event_idx, ring):
         """Short description of one ring, for panel titles."""
         pdg = self.ring_labels[event_idx][ring]
@@ -252,3 +336,39 @@ class LoadSegData():
         if "dominant_dice" in a:
             txt += f", dice={a['dominant_dice']:.2f}"
         return txt
+
+
+class WCSimTruth():
+    """
+    Per-hit truth of a WCSim h5 file (`wcsim_root_to_h5.py`, the `src_file` of the segmented
+    events): /events/digi_hits (tube_id 1-based, time_ns, charge_pe, parent_track_id,
+    primary_track_id) indexed by /events/digi_hit_index, and /events/particles by
+    /events/particle_index. `primary_track_id` is the true primary each hit's photons come
+    from (-1: dark noise); it is the `true_parent_track_id` of the segmented file.
+    """
+
+    def __init__(self, path, n_pmts=DEFAULT_N_PMTS):
+        self.path, self.n_pmts = path, n_pmts
+        with h5py.File(path, "r") as f:
+            ev = f["events"]
+            self.hit_index = ev["digi_hit_index"][()]
+            self.particle_index = ev["particle_index"][()]
+        print(f"[WCSimTruth] {path}: {len(self)} events, {self.hit_index[-1]} digitized hits")
+
+    def __len__(self):
+        return len(self.hit_index) - 1
+
+    def digi_hits(self, src_event):
+        a, b = self.hit_index[src_event], self.hit_index[src_event + 1]
+        with h5py.File(self.path, "r") as f:
+            h = f["events/digi_hits"][a:b]
+        pmt = h["tube_id"].astype(np.int64) - 1
+        if pmt.size and (pmt.min() < 0 or pmt.max() >= self.n_pmts):
+            raise ValueError(f"{self.path} event {src_event}: tube_id out of [1, {self.n_pmts}]")
+        return dict(pmt=pmt, time=h["time_ns"].astype(float), charge=h["charge_pe"].astype(float),
+                    primary=h["primary_track_id"].astype(int))
+
+    def particles(self, src_event):
+        a, b = self.particle_index[src_event], self.particle_index[src_event + 1]
+        with h5py.File(self.path, "r") as f:
+            return f["events/particles"][a:b]

@@ -9,7 +9,7 @@ from analysis.load_seg_h5_data import LoadSegData
 N_PMTS = 20
 
 
-def _ring(g, name, tube_ids, q, t, pdg=13, direction=(1.0, 0.0, 0.0), pred=None):
+def _ring(g, name, tube_ids, q, t, pdg=13, direction=(1.0, 0.0, 0.0), pred=None, track=None):
     R = g.create_group(name)
     R["tube_ids"] = np.asarray(tube_ids, dtype=np.int32)
     R["pmt_charge"] = np.asarray(q, dtype=np.float32)
@@ -24,6 +24,9 @@ def _ring(g, name, tube_ids, q, t, pdg=13, direction=(1.0, 0.0, 0.0), pred=None)
     if pred is not None:
         R["predicted_three_momenta"] = np.asarray(pred, dtype=np.float32)
     R.attrs["dominant_dice"] = 0.8
+    if track is not None:
+        R.attrs["matched_parent_track_id"] = track
+        R.attrs["source"] = "pred"
 
 
 @pytest.fixture
@@ -32,12 +35,38 @@ def seg_file(tmp_path):
     path = tmp_path / "seg.h5"
     with h5py.File(path, "w") as f:
         e0 = f.create_group("event_000000")
-        _ring(e0, "ring_0", [1, 2, 3], [1.0, 2.0, 0.5], [10.0, 11.0, 12.0], pred=(0.0, 1.0, 0.0))
+        e0.attrs["src_event"] = 0
+        _ring(e0, "ring_0", [1, 2, 3], [1.0, 2.0, 0.5], [10.0, 11.0, 12.0], pred=(0.0, 1.0, 0.0), track=2)
         _ring(e0, "ring_1", [3, 4, N_PMTS], [1.5, 3.0, 1.0], [12.0, 20.0, 21.0], pdg=11,
-              direction=(0.0, 0.0, 1.0), pred=(0.0, 0.0, 2.0))
+              direction=(0.0, 0.0, 1.0), pred=(0.0, 0.0, 2.0), track=1)
         e1 = f.create_group("event_000001")
+        e1.attrs["src_event"] = 1
         # one ring, PMT 5 hit in two triggers (distinct times): must stay two hits
         _ring(e1, "ring_0", [5, 5, 6], [1.0, 2.0, 1.0], [10.0, 1200.0, 11.0])
+    return str(path)
+
+
+HIT_DT = np.dtype([("tube_id", "<i4"), ("time_ns", "<f4"), ("charge_pe", "<f4"), ("x", "<f4"), ("y", "<f4"),
+                   ("z", "<f4"), ("parent_track_id", "<i4"), ("primary_track_id", "<i4")])
+PART_DT = np.dtype([("track_id", "<i4"), ("parent_id", "<i4"), ("pdg", "<i4"), ("energy_mev", "<f4")])
+
+
+@pytest.fixture
+def wcsim_file(tmp_path):
+    """The WCSim h5 behind seg_file (tube_id 1-based). Event 0: track 1 (e-) and 2 (mu-), one
+    dark-noise hit and one hit in no ring. Event 1: the hits of its single ring, track 1."""
+    hits0 = [(1, 10, 1.0, 1), (2, 11, 2.0, 2), (3, 12, 2.0, 1), (4, 20, 3.0, 1), (N_PMTS, 21, 1.0, 1),
+             (7, 30, 0.5, -1), (8, 40, 4.0, 2)]
+    hits1 = [(5, 10, 1.0, 1), (5, 1200, 2.0, 1), (6, 11, 1.0, 1)]
+    rows = [(t, tm, q, 0, 0, 0, p, p) for t, tm, q, p in hits0 + hits1]
+    parts = [(1, 0, 11, 300.0), (2, 0, 13, 500.0), (5, 1, 22, 1.0), (1, 0, 13, 400.0)]
+    path = tmp_path / "wcsim.h5"
+    with h5py.File(path, "w") as f:
+        ev = f.create_group("events")
+        ev["digi_hits"] = np.array(rows, dtype=HIT_DT)
+        ev["digi_hit_index"] = np.array([0, len(hits0), len(hits0) + len(hits1)], dtype=np.int64)
+        ev["particles"] = np.array(parts, dtype=PART_DT)
+        ev["particle_index"] = np.array([0, 3, 4], dtype=np.int64)
     return str(path)
 
 
@@ -104,6 +133,45 @@ def test_same_ring_duplicate_is_not_shared(tmp_path):
     assert data.hit_n_rings.max() == 1
 
 
+def test_truth_per_particle(seg_file, wcsim_file):
+    data = LoadSegData(seg_file, n_pmts=N_PMTS, truth_path=wcsim_file)
+    tp = data.true_parents(0)
+    assert [(p["track_id"], p["pdg"], p["pe"], p["ring"]) for p in tp] == [(1, 11, 7.0, 1), (2, 13, 6.0, 0)]
+    assert data.noise_pe(0) == 0.5
+    data.load_true_hit_info(0)                       # the real event: noise and the no-ring hit included
+    assert data.hit_pmt.size == 7 and np.isclose(data.hit_charge.sum(), 13.5)
+    data.load_true_hit_info(0, track_id=2)
+    assert sorted(data.hit_pmt.tolist()) == [1, 7]  # 0-based
+    assert data.true_parents(1)[0]["pdg"] == 13
+
+
+def test_truth_wrong_file_is_rejected(seg_file, wcsim_file, tmp_path):
+    """A truth file whose event does not hold the ring hits disables the truth for that event."""
+    with h5py.File(wcsim_file, "a") as f:
+        f["events/digi_hits"][...] = np.array([(9, 99, 1, 0, 0, 0, 1, 1)] * 10, dtype=HIT_DT)
+    data = LoadSegData(seg_file, n_pmts=N_PMTS, truth_path=wcsim_file)
+    with pytest.warns(UserWarning, match="wrong truth file"):
+        assert data.true_parents(0) == []
+
+
+def test_panel_grid_and_views():
+    from analysis.seg_display import compact, panel_grid, visible_keys
+    # 2 true particles; ring 0 matched to particle 1, ring 1 to particle 0, ring 2 unmatched
+    pos = panel_grid(2, [1, 0, None], 3)
+    assert pos[("true", 0)] == (0, 1) and pos[("reco", 1)] == (1, 1)
+    assert pos[("reco", 0)] == (1, 2) and pos[("reco", 2)] == (1, 3)
+    # no truth: one row
+    assert panel_grid(0, [], 2) == {("event",): (0, 0), ("reco", 0): (0, 1), ("reco", 1): (0, 2)}
+    keys = list(pos)
+    assert visible_keys(keys, "true") == [("event",), ("true", 0), ("true", 1)]
+    assert ("true", 0) not in visible_keys(keys, "reco")
+    solo = visible_keys(keys, "custom", hidden=set(keys) - {("reco", 2)})
+    assert compact(pos, solo) == {("reco", 2): (0, 0)}
+    assert compact(pos, keys)[("reco", 1)] == (1, 1)                # all: ring 1 under true particle 0
+    assert compact(pos, visible_keys(keys, "reco")) == {("event",): (0, 0), ("reco", 1): (0, 1),
+                                                        ("reco", 0): (0, 2), ("reco", 2): (0, 3)}
+
+
 def test_cnn_image_places_and_aggregates(geometry):
     """Pixel = mapping[pmt]; a PMT hit twice gets the summed charge and the earliest time."""
     from analysis.seg_display import cnn_image, load_mapping, pmt_mask
@@ -143,4 +211,31 @@ def test_window_smoke(seg_file, geometry, monkeypatch):
     win.toggle_theme()
     win.go(1)
     assert win.i == 1 and len(win.panels) == 2 and win.theme == "light"
+    win.close()
+
+
+def test_window_views_with_truth(seg_file, wcsim_file, geometry, monkeypatch):
+    """All / true / reco / custom views and the custom toggles (offscreen Qt)."""
+    pytest.importorskip("pyqtgraph")
+    pytest.importorskip("PyQt6")
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    from analysis.seg_display import run
+    _, mapping = geometry
+    data = LoadSegData(seg_file, n_pmts=N_PMTS, truth_path=wcsim_file)
+    app, win = run(data, mapping, event=0, theme="dark")
+    assert len(win.panels) == 5 and len(win.images) == 5             # event + 2 true + 2 rings
+    win.set_mode("true")
+    assert sorted(k[0] for k in win.images.values()) == ["event", "true", "true"]
+    win.set_mode("reco")
+    assert sorted(k[0] for k in win.images.values()) == ["event", "reco", "reco"]
+    win.set_mode("custom")
+    win.toggle_panel(("event",), False)
+    win.toggle_panel(("reco", 0), False)
+    assert len(win.images) == 3 and win.custom_widget.isVisibleTo(win)
+    win.go(1)                                                         # hidden panels stay hidden
+    assert ("event",) not in win.images.values()
+    win.close()
+    no_truth = LoadSegData(seg_file, n_pmts=N_PMTS)
+    app, win = run(no_truth, mapping, event=0, theme="light", mode="true")
+    assert win.mode == "all" and not win.btn_mode["true"].isEnabled()
     win.close()

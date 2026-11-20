@@ -261,3 +261,12 @@ def test_window_views_with_truth(seg_file, wcsim_file, geometry, monkeypatch):
     app, win = run(no_truth, mapping, event=0, theme="light", mode="true")
     assert win.mode == "all" and not win.btn_mode["true"].isEnabled()
     win.close()
+
+
+def test_loaddata_accepts_pdg_labels():
+    """LoadData used to crash (IndexError 13) on files storing PDG codes."""
+    from analysis.load_h5_data import to_watchmal_labels
+    assert to_watchmal_labels(np.array([0, 1, 2, 3])).tolist() == [0, 1, 2, 3]
+    assert to_watchmal_labels(np.array([11, -13, 22, 111, 13])).tolist() == [1, 2, 0, 3, 2]
+    with pytest.raises(ValueError, match="211"):
+        to_watchmal_labels(np.array([11, 211]))
